@@ -1,0 +1,134 @@
+/* One palette (Okabe-Ito based, colour-blind safe) and one type scale for both entry points. */
+:root {
+  color-scheme: light dark;
+  --mat: #2a3135;
+  --mat-line: #39434a;
+  --mat-major: #4c5960;
+  --mat-tick: #9fb0b8;
+  --paper-back: #faf8f2;
+  --paper-ink: #14201e;
+  --tape: #f2c230;
+  --bg: #faf8f2;
+  --bg-2: #eeeee8;
+  --card: #faf8f2;
+  --ink: #14201e;
+  --muted: #5c6b66;
+  --line: rgba(20, 32, 30, 0.18);
+  --blue: #0072b2;
+  --verm: #b84f00;
+  --gold: var(--tape);
+  --on-ink: #faf8f2;
+  --paper: #0072b2;
+
+  --font-body: ui-rounded, 'SF Pro Rounded', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-display: var(--font-body);
+  --t-xs: 0.75rem;
+  --t-sm: 0.875rem;
+  --t-md: 1rem;
+  --t-lg: 1.25rem;
+  --t-xl: 1.75rem;
+  --t-2xl: 2.5rem;
+  --radius: 14px;
+  --tap: 48px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1e2629;
+    --bg-2: #303a3d;
+    --card: #1e2629;
+    --ink: #eaf0ee;
+    --muted: #a3b1ac;
+    --line: rgba(234, 240, 238, 0.2);
+    --blue: #56b4e9;
+    --verm: #f08a45;
+    --on-ink: #1e2629;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font: 400 var(--t-md) / 1.4 var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  overflow: hidden;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: var(--tap);
+  padding: 0 1.25rem;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: transparent;
+  font-weight: 650;
+  cursor: pointer;
+  transition:
+    transform 120ms ease,
+    background-color 120ms ease;
+}
+
+.btn:active {
+  transform: scale(0.97);
+}
+
+.btn--primary {
+  border-color: var(--tape);
+  background: var(--tape);
+  color: var(--paper-ink);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+:focus-visible {
+  outline: 3px solid var(--tape);
+  outline-offset: 2px;
+}
+
+.num {
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

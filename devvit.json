@@ -1,0 +1,118 @@
+{
+  "$schema": "https://developers.reddit.com/schema/config-file.v1.json",
+  "name": "contrarian-daily",
+  "post": {
+    "dir": "dist/client",
+    "entrypoints": {
+      "default": {
+        "entry": "splash.html",
+        "height": "tall"
+      },
+      "game": {
+        "entry": "game.html"
+      }
+    }
+  },
+  "server": {
+    "dir": "dist/server",
+    "entry": "index.cjs"
+  },
+  "permissions": {
+    "redis": true,
+    "journeys": true,
+    "reddit": {
+      "enable": true,
+      "asUser": [
+        "SUBMIT_POST",
+        "SUBMIT_COMMENT",
+        "SUBSCRIBE_TO_SUBREDDIT"
+      ]
+    }
+  },
+  "triggers": {
+    "onAppInstall": "/internal/triggers/on-app-install",
+    "onAppUpgrade": "/internal/triggers/on-app-upgrade",
+    "onPostDelete": "/internal/triggers/on-post-delete"
+  },
+  "scheduler": {
+    "tasks": {
+      "daily-post": {
+        "endpoint": "/internal/scheduler/daily-post",
+        "cron": "*/15 * * * *"
+      }
+    }
+  },
+  "menu": {
+    "items": [
+      {
+        "label": "Foldline: post today's puzzle now",
+        "description": "Creates today's puzzle post if it does not exist yet",
+        "location": "subreddit",
+        "forUserType": "moderator",
+        "endpoint": "/internal/menu/post-now"
+      },
+      {
+        "label": "Foldline: regenerate today's puzzle",
+        "description": "Replaces today's puzzle and starts a clean leaderboard",
+        "location": "subreddit",
+        "forUserType": "moderator",
+        "endpoint": "/internal/menu/regenerate"
+      },
+      {
+        "label": "Foldline: skip a day",
+        "description": "Skip today or tomorrow without breaking streaks",
+        "location": "subreddit",
+        "forUserType": "moderator",
+        "endpoint": "/internal/menu/skip"
+      },
+      {
+        "label": "Foldline: post a specific day",
+        "description": "Backfill a missed day or post an upcoming one early",
+        "location": "subreddit",
+        "forUserType": "moderator",
+        "endpoint": "/internal/menu/post-date"
+      }
+    ]
+  },
+  "forms": {
+    "regenerateForm": "/internal/form/regenerate",
+    "skipForm": "/internal/form/skip",
+    "postDateForm": "/internal/form/post-date"
+  },
+  "settings": {
+    "subreddit": {
+      "startDate": {
+        "type": "string",
+        "label": "Start date (Day 1)",
+        "helpText": "The date of Day 1, as YYYY-MM-DD. Leave empty to use the date the app was installed.",
+        "placeholder": "2026-11-16",
+        "defaultValue": "",
+        "validationEndpoint": "/internal/settings/validate-start-date"
+      },
+      "timezone": {
+        "type": "string",
+        "label": "Release timezone",
+        "helpText": "IANA timezone name, for example UTC or America/Los_Angeles. A day's puzzle is released at midnight in this zone. Puzzle content never depends on it.",
+        "placeholder": "UTC",
+        "defaultValue": "UTC",
+        "validationEndpoint": "/internal/settings/validate-timezone"
+      },
+      "communityRoutes": {
+        "type": "boolean",
+        "label": "Community Routes",
+        "helpText": "Let players build puzzles. The week's top-upvoted valid route becomes Sunday's puzzle.",
+        "defaultValue": true
+      },
+      "streakFlair": {
+        "type": "boolean",
+        "label": "Streak flair",
+        "helpText": "Let players opt in to a user flair for their best streak: Crease (3 days), Pleat (7), Origami (30).",
+        "defaultValue": true
+      }
+    }
+  },
+  "scripts": {
+    "dev": "vite build --watch",
+    "build": "vite build"
+  }
+}
