@@ -1,9 +1,12 @@
 import { readFileSync } from 'node:fs';
+import { Context, runWithContext } from '@devvit/server';
 import { createDevvitTest } from '@devvit/test/server/vitest';
 import { reddit, redis } from '@devvit/web/server';
+import { Header } from '@devvit/shared-types/Header.js';
 import { describe, expect, vi } from 'vitest';
 import type { FoldMove } from '../../shared/engine';
 import { generate } from '../../shared/generator';
+import { puzzleHook } from '../../shared/hooks';
 import { movesToWire } from '../../shared/moves';
 import { parsePostWire, type PostInfo } from '../../shared/postdata';
 import { encodeAngles, encodeTurns, puzzleSignature } from '../../shared/puzzle';
@@ -14,7 +17,7 @@ import { DEFAULT_CONFIG, setSkipped } from './config';
 import { ApiError } from './errors';
 import { setFlairOptIn } from './flair';
 import { boardFor, dayBoard, K } from './keys';
-import { ensureDailyPost, regenerateToday } from './posts';
+import { ensureDailyPost, regenerateToday, replacementFor } from './posts';
 import { loadPostInfo } from './postinfo';
 import { completeAttempt, fieldView, leaderboard, loadResult, startAttempt } from './results';
 import { shareResult } from './share';
@@ -264,6 +267,86 @@ describe('moderator tools', () => {
 
   test('regenerate without a post reports it', async () => {
     expect(await regenerateToday(NOW)).toEqual({ status: 'no-post' });
+  });
+
+  test('regenerate skips a revision that would repeat the same puzzle', () => {
+    const current = generate(TODAY, 1);
+    const signature = puzzleSignature(current);
+    const next = replacementFor(TODAY, 3, 0, signature, null);
+    expect(next).not.toBeNull();
+    if (!next) return;
+    expect(puzzleSignature(next.puzzle)).not.toBe(signature);
+    expect(next.rev).toBeGreaterThan(1);
+  });
+
+  test('an in-place replacement keeps the title line and changes the paper', () => {
+    const current = generate(TODAY);
+    const hook = puzzleHook(current);
+    const next = replacementFor(TODAY, 3, 0, puzzleSignature(current), hook);
+    if (!next) return;
+    expect(puzzleHook(next.puzzle)).toBe(hook);
+    expect(puzzleSignature(next.puzzle)).not.toBe(puzzleSignature(current));
+  });
+
+  test('the regenerate form keeps the puzzle until the box is checked', async () => {
+    const outcome = await ensureDailyPost(Date.now());
+    if (outcome.status !== 'created' && outcome.status !== 'exists') throw new Error(outcome.status);
+    const before = await loadPostInfo(outcome.postId);
+    if (!before) throw new Error('no post info');
+    const send = (confirm: unknown) =>
+      app.request('/internal/form/regenerate', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ confirm }),
+      });
+    expect(await (await send(false)).json()).toEqual({ showToast: "Nothing changed. Today's puzzle was kept." });
+    expect(await (await send('false')).json()).toEqual({ showToast: "Nothing changed. Today's puzzle was kept." });
+    expect((await loadPostInfo(outcome.postId))?.rev).toBe(before.rev);
+
+    const replaced = await send('true');
+    const body = (await replaced.json()) as { showToast?: { text?: string } | string };
+    expect(replaced.status).toBe(200);
+    const toast = typeof body.showToast === 'string' ? body.showToast : body.showToast?.text;
+    expect(toast).toMatch(/replaced/);
+    const posted = await redis.hGet(K.posts, before.date);
+    const after = posted ? await loadPostInfo(posted) : null;
+    expect(after?.rev).toBeGreaterThan(before.rev);
+    expect(puzzleSignature(after!.puzzle)).not.toBe(puzzleSignature(before.puzzle));
+  });
+
+  test('a logged-out player can read the leaderboard but cannot store a score', async ({ headers }) => {
+    const { info, postId, board } = await todaysPost();
+    await complete(info, board, alice, solution(info));
+    const ctx = Context({
+      ...headers,
+      [Header.User]: '',
+      [Header.Username]: '',
+      [Header.AppUser]: '',
+      [Header.Post]: postId,
+    });
+    await runWithContext(ctx, async () => {
+      const init = (await (await app.request('/api/init')).json()) as {
+        user: { loggedIn: boolean; name: string | null };
+        result: unknown;
+      };
+      expect(init.user).toEqual({ loggedIn: false, name: null });
+      expect(init.result).toBeNull();
+      const denied = await app.request('/api/attempt/complete', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ rev: info.rev, moves: [], clientMs: 1 }),
+      });
+      expect(denied.status).toBe(401);
+      expect(await denied.json()).toMatchObject({ code: 'login' });
+      const leaders = (await (await app.request('/api/leaderboard')).json()) as {
+        total: number;
+        me: unknown;
+        rows: Array<{ name: string; me: boolean; rank: number }>;
+      };
+      expect(leaders.total).toBe(1);
+      expect(leaders.me).toBeNull();
+      expect(leaders.rows[0]).toMatchObject({ name: 'alice', me: false, rank: 1 });
+    });
   });
 
   test('settings validation accepts good values and explains bad ones', async () => {
