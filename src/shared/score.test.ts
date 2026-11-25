@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { FoldMove } from './engine';
-import { bucketFor, decodeScore, encodeScore, formatTime, ordinal, standingText, TIME_CAP_MS } from './score';
+import { bucketFor, decodeScore, encodeScore, formatTime, ordinal, resultNote, standingText, TIME_CAP_MS } from './score';
 import { CLOSER, FURTHER, shareGrid, shareText } from './share';
 import { validatePuzzle } from './validate';
 
@@ -38,6 +38,10 @@ describe('leaderboard score', () => {
     expect(ordinal(12)).toBe('12th');
     expect(ordinal(23)).toBe('23rd');
     expect(formatTime(42_900)).toBe('0:42');
+    expect(resultNote('First to finish today', 1)).toBe('First to finish today.');
+    expect(resultNote(null, 0)).toBe('Be the first on the leaderboard.');
+    expect(resultNote(null, 1)).toBeNull();
+    expect(resultNote(null, 12)).toBeNull();
     expect(formatTime(125_000)).toBe('2:05');
   });
 });
