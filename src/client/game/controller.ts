@@ -1,12 +1,13 @@
 import { context } from '@devvit/web/client';
 import { applyMove, isSolved, type FoldAngle, type FoldMove } from '../../shared/engine';
-import { decodeMoves, movesToWire, replay } from '../../shared/moves';
+import { decodeMoves, movesToWire, parseMoves, replay } from '../../shared/moves';
 import { parsePostWire, type PostInfo } from '../../shared/postdata';
 import { toLevel } from '../../shared/puzzle';
 import { shareGrid } from '../../shared/share';
 import type { CompleteResponse, InitResponse } from '../../shared/api';
 import { api, ApiFailure } from '../lib/api';
 import { track } from '../lib/track';
+import { isPendingSolve, keepsPendingSolve, pendingAction, puzzleForPlay, type PendingSolve } from './session';
 
 export type Phase = 'loading' | 'error' | 'play' | 'solved';
 
@@ -19,11 +20,16 @@ export interface LocalResult {
 
 const pendingKey = (postId: string): string => `foldline:pending:${postId}`;
 
-interface PendingSubmission {
-  rev: number;
-  moves: ReturnType<typeof movesToWire>;
-  clientMs: number;
-  folds: number;
+type PendingSubmission = PendingSolve;
+
+function readPending(postId: string | undefined): PendingSubmission | null {
+  if (!postId) return null;
+  try {
+    const raw = JSON.parse(localStorage.getItem(pendingKey(postId)) ?? 'null') as unknown;
+    return isPendingSolve(raw) ? raw : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -34,6 +40,8 @@ interface PendingSubmission {
 export class Controller {
   version = 0;
   phase: Phase = 'loading';
+  /** Whether `/api/init` has answered. The board does not wait on this. */
+  initState: 'loading' | 'ready' | 'offline' = 'loading';
   error: string | null = null;
   info: PostInfo | null = null;
   init: InitResponse | null = null;
@@ -54,6 +62,13 @@ export class Controller {
   private history: FoldAngle[][] = [];
   private finishing = false;
   private readonly listeners = new Set<() => void>();
+
+  constructor() {
+    const cached = parsePostWire(context.postData);
+    if (!cached) return;
+    this.applyFresh(cached);
+    this.liveText = 'Puzzle ready. Drag a panel to fold it.';
+  }
 
   subscribe = (listener: () => void): (() => void) => {
     this.listeners.add(listener);
@@ -91,43 +106,123 @@ export class Controller {
   }
 
   /** The result to show on the end card: the server's, or the locally kept one. */
-  get result(): { folds: number; ms: number; par: number; grid: string } | null {
+  get result(): {
+    folds: number;
+    ms: number;
+    par: number;
+    grid: string;
+  } | null {
     if (this.complete) return this.complete.result;
     if (this.init?.result) return this.init.result;
     return this.localResult;
   }
 
   async load(): Promise<void> {
-    const fromPost = parsePostWire(context.postData);
+    const cached = this.info ?? parsePostWire(context.postData);
     try {
       const init = await api.init();
-      const info = fromPost ?? parsePostWire(init.post);
+      const server = parsePostWire(init.post);
+      const { info, replaced } = puzzleForPlay(cached, server);
       if (!info) throw new Error('This post has no puzzle.');
       this.init = init;
-      this.info = info;
+      this.initState = 'ready';
       this.serverOffset = init.now - Date.now();
-      if (init.result) {
-        this.moves = decodeMoves(init.result.moves);
-        this.angles = replay(info.puzzle, this.moves).angles;
-        this.history = [[...info.puzzle.start]];
-        this.liveText = `Solved in ${init.result.folds} folds.`;
-        this.phase = 'solved';
+      const folded = this.moves.length > 0 || this.finishing || this.solved;
+      if (folded) {
+        if (replaced) this.stale = true;
+        this.info = this.info ?? info;
+        if (init.user.loggedIn && !init.result && !this.complete) void this.submitPending();
+      } else if (init.result) {
+        this.showServerResult(info, init.result.moves, init.result.folds);
+        this.clearPending();
       } else {
-        this.angles = [...info.puzzle.start];
-        this.history = [[...this.angles]];
-        this.startedAt = init.startedAt;
-        this.liveText = 'Puzzle ready. Drag a panel to fold it.';
-        this.phase = 'play';
-        if (init.user.loggedIn) void this.submitPending();
+        this.reconcilePending(info, init.user.loggedIn, init.startedAt);
       }
     } catch (error) {
-      this.error =
-        error instanceof Error && error.message
-          ? error.message
-          : 'The puzzle could not be loaded.';
-      this.phase = 'error';
+      this.initState = 'offline';
+      if (!this.info || this.phase === 'loading') {
+        this.error = error instanceof Error && error.message ? error.message : 'The puzzle could not be loaded.';
+        this.phase = 'error';
+      }
     }
     this.emit();
+  }
+
+  private applyFresh(info: PostInfo): void {
+    this.info = info;
+    this.angles = [...info.puzzle.start];
+    this.moves = [];
+    this.history = [[...this.angles]];
+    this.practice = false;
+    this.practiceFolds = null;
+    this.phase = 'play';
+  }
+
+  private showServerResult(info: PostInfo, moves: string, folds: number): void {
+    this.info = info;
+    this.moves = decodeMoves(moves);
+    this.angles = replay(info.puzzle, this.moves).angles;
+    this.history = [[...info.puzzle.start]];
+    this.localResult = null;
+    this.liveText = `Solved in ${folds} folds.`;
+    this.phase = 'solved';
+  }
+
+  /** Show a logged-out solve again, or send it once the player has an account. */
+  private reconcilePending(info: PostInfo, loggedIn: boolean, startedAt: number | null): void {
+    const pending = readPending(context.postId);
+    const action = pendingAction({
+      pending,
+      rev: info.rev,
+      loggedIn,
+      hasServerResult: false,
+      folded: false,
+    });
+    if (action === 'drop') this.clearPending();
+    if ((action === 'restore' || action === 'submit') && pending && this.showLocal(info, pending)) {
+      if (action === 'submit') void this.submitPending();
+      return;
+    }
+    if (action === 'restore' || action === 'submit') this.clearPending();
+    if (!this.info || this.info.kind !== info.kind || this.info.rev !== info.rev || this.info.date !== info.date) this.applyFresh(info);
+    this.startedAt = startedAt;
+    this.phase = 'play';
+    this.liveText = 'Puzzle ready. Drag a panel to fold it.';
+  }
+
+  private showLocal(info: PostInfo, pending: PendingSubmission): boolean {
+    const moves = parseMoves(pending.moves);
+    if (!moves) return false;
+    let played: ReturnType<typeof replay>;
+    try {
+      played = replay(info.puzzle, moves);
+    } catch {
+      return false;
+    }
+    if (!played.solved) return false;
+    this.info = info;
+    this.moves = moves;
+    this.angles = played.angles;
+    this.history = [[...info.puzzle.start]];
+    this.localResult = {
+      folds: moves.length,
+      ms: Math.max(0, Math.round(pending.clientMs)),
+      par: info.puzzle.par,
+      grid: shareGrid(info.puzzle, moves),
+    };
+    this.phase = 'solved';
+    this.liveText = `Solved in ${moves.length} folds.`;
+    return true;
+  }
+
+  private clearPending(): void {
+    const postId = context.postId;
+    if (!postId) return;
+    try {
+      localStorage.removeItem(pendingKey(postId));
+    } catch {
+      /* storage blocked */
+    }
   }
 
   fold(index: number, angle: FoldAngle): void {
@@ -155,13 +250,13 @@ export class Controller {
     this.angles = next;
     this.moves.push({ index, angle });
     this.history.push([...next]);
-    this.liveText = `Hinge ${index} set to ${angle} degrees. ${this.folds} ${
-      this.folds === 1 ? 'fold' : 'folds'
-    } so far.`;
+    this.liveText = `Hinge ${index} set to ${angle} degrees. ${this.folds} ${this.folds === 1 ? 'fold' : 'folds'} so far.`;
 
     if (!this.practice) {
       const atGoal = this.angles.filter((a, i) => i > 0 && a === puzzle.goal[i]).length;
-      track('attempt_progress', { progress: atGoal / Math.max(1, this.angles.length - 1) });
+      track('attempt_progress', {
+        progress: atGoal / Math.max(1, this.angles.length - 1),
+      });
     }
     if (isSolved(level, this.angles)) {
       if (this.practice) {
@@ -218,29 +313,38 @@ export class Controller {
   /** Retry a result that could not be saved earlier (after login, or after a network error). */
   async submitPending(): Promise<void> {
     const postId = context.postId;
-    if (!postId) return;
-    let pending: PendingSubmission | null;
-    try {
-      pending = JSON.parse(localStorage.getItem(pendingKey(postId)) ?? 'null') as PendingSubmission | null;
-    } catch {
-      pending = null;
+    if (!postId || !this.loggedIn) return;
+    const pending = readPending(postId);
+    if (!pending) return;
+    const moves = parseMoves(pending.moves);
+    if (!moves) {
+      this.clearPending();
+      return;
     }
-    if (!pending || !this.loggedIn) return;
     try {
       const complete = await api.complete({
         rev: pending.rev,
-        moves: pending.moves,
+        moves: movesToWire(moves),
         clientMs: pending.clientMs,
       });
-      localStorage.removeItem(pendingKey(postId));
+      this.clearPending();
       this.complete = complete;
       this.localResult = null;
       this.submitError = null;
       this.phase = 'solved';
       this.emit();
     } catch (error) {
-      if (error instanceof ApiFailure && (error.code === 'invalid-moves' || error.code === 'unsolved'))
-        localStorage.removeItem(pendingKey(postId));
+      const code = error instanceof ApiFailure ? error.code : null;
+      if (!keepsPendingSolve(code)) {
+        this.clearPending();
+        this.localResult = null;
+        this.submitError = code === 'stale' ? null : 'The server could not verify that solve. It was not saved.';
+        if (code === 'stale') this.stale = true;
+        if (this.info) this.applyFresh(this.info);
+      } else {
+        this.submitError = 'Your result could not be saved yet.';
+      }
+      this.emit();
     }
   }
 
@@ -248,10 +352,7 @@ export class Controller {
     const puzzle = this.puzzle;
     if (!puzzle || !this.info || this.finishing) return;
     this.finishing = true;
-    const clientMs = Math.max(
-      0,
-      Math.round(Date.now() + this.serverOffset - (this.startedAt ?? Date.now() + this.serverOffset))
-    );
+    const clientMs = Math.max(0, Math.round(Date.now() + this.serverOffset - (this.startedAt ?? Date.now() + this.serverOffset)));
     const moves = movesToWire(this.moves);
     const local: LocalResult = {
       folds: this.moves.length,
@@ -261,7 +362,11 @@ export class Controller {
     };
     this.liveText = `Solved in ${local.folds} folds.`;
     try {
-      const complete = await api.complete({ rev: this.info.rev, moves, clientMs });
+      const complete = await api.complete({
+        rev: this.info.rev,
+        moves,
+        clientMs,
+      });
       this.complete = complete;
       this.localResult = null;
       this.submitError = null;
@@ -272,25 +377,24 @@ export class Controller {
         this.stale = true;
         this.submitError = null;
         this.localResult = null;
-      } else if (
-        error instanceof ApiFailure &&
-        (error.code === 'invalid-moves' || error.code === 'unsolved')
-      ) {
+      } else if (error instanceof ApiFailure && (error.code === 'invalid-moves' || error.code === 'unsolved')) {
         this.submitError = 'The server could not verify that solve. It was not saved.';
         this.localResult = null;
       } else {
         // Logged out or offline: keep the verified moves locally and offer a retry.
         this.localResult = local;
-        this.submitError =
-          error instanceof ApiFailure && error.code === 'login'
-            ? null
-            : 'Your result could not be saved yet.';
+        this.submitError = error instanceof ApiFailure && error.code === 'login' ? null : 'Your result could not be saved yet.';
         const postId = context.postId;
         if (postId) {
           try {
             localStorage.setItem(
               pendingKey(postId),
-              JSON.stringify({ rev: this.info.rev, moves, clientMs, folds: local.folds })
+              JSON.stringify({
+                rev: this.info.rev,
+                moves,
+                clientMs,
+                folds: local.folds,
+              })
             );
           } catch {
             /* storage blocked; the result is lost on reload, nothing more */

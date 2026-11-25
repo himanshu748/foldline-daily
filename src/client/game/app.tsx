@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { hasSeenHowTo, markHowToSeen } from '../lib/howto-seen';
+import { markHowToSeen } from '../lib/howto-seen';
 import { sound } from '../lib/sound';
 import type { BoardScene } from '../scene/board';
 import { Controller } from './controller';
@@ -15,24 +15,14 @@ export function App() {
   const [soundOn, setSoundOn] = useState(sound.enabled);
   const [progress, setProgress] = useState({ inPlace: 0, total: 0 });
   const updateProgress = useCallback((inPlace: number, total: number) => {
-    setProgress((current) =>
-      current.inPlace === inPlace && current.total === total ? current : { inPlace, total }
-    );
+    setProgress((current) => (current.inPlace === inPlace && current.total === total ? current : { inPlace, total }));
   }, []);
-  // First-time players see the rules before their first fold; anyone can reopen them.
-  const [seenHelpBefore] = useState(hasSeenHowTo);
-  const [helpChoice, setHelpChoice] = useState<boolean | null>(null);
-  const helpOpen =
-    helpChoice ??
-    (!seenHelpBefore &&
-      !controller.init?.result &&
-      !(controller.init && controller.init.streak.best > 0) &&
-      controller.phase === 'play' &&
-      !controller.solved);
-  const openHelp = useCallback(() => setHelpChoice(true), []);
+  // The rules stay one tap away. They do not cover the board, so the first fold can happen immediately.
+  const [helpOpen, setHelpOpen] = useState(false);
+  const openHelp = useCallback(() => setHelpOpen(true), []);
   const closeHelp = useCallback(() => {
     markHowToSeen();
-    setHelpChoice(false);
+    setHelpOpen(false);
   }, []);
 
   useEffect(() => {
@@ -117,17 +107,8 @@ export function App() {
 
   return (
     <div className="game">
-      <Hud
-        controller={controller}
-        progress={progress}
-        soundOn={soundOn}
-        onToggleSound={toggleSound}
-        onFlip={flipView}
-        onHelp={openHelp}
-      />
-      {controller.practice && controller.phase === 'play' && (
-        <p className="banner">Practice run: your score is safe.</p>
-      )}
+      <Hud controller={controller} progress={progress} soundOn={soundOn} onToggleSound={toggleSound} onFlip={flipView} onHelp={openHelp} />
+      {controller.practice && controller.phase === 'play' && <p className="banner">Practice run: your score is safe.</p>}
       {controller.stale && (
         <p className="banner banner--warn">
           This puzzle changed while you played.{' '}

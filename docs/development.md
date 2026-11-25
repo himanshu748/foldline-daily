@@ -12,9 +12,21 @@ The harness runs the game with local endpoints and does not create Reddit result
 Set `FOLDLINE_DATE` to choose a different puzzle date. The real Reddit playtest command is
 `npm run dev` after signing in to the Devvit CLI.
 
-Foldline Daily is the public name and repository name. `contrarian-daily` is the
-registered Devvit identifier used by the installed app and its
-[developer listing](https://developers.reddit.com/apps/contrarian-daily).
+## Devvit app name
+
+Foldline Daily is the public name. Players see Foldline on the splash, the board, and the result card.
+
+`contrarian-daily` in `devvit.json` is the app account name and the community URL slug. The [config schema](https://developers.reddit.com/schema/config-file.v1.json) describes `name` that way, and the pattern is a lowercase slug of at most 20 characters. `foldline-daily` would fit that pattern for a brand-new app. It does not rename this one.
+
+Reddit's docs say changing the name in the config file does not change an app that has already been uploaded. The display name is edited with "Edit app details" on the app page ([Update your app](https://developers.reddit.com/docs/app_update_details)). The app account username cannot be changed. A different account name means creating a new app and moving the code ([App accounts](https://developers.reddit.com/docs/0.9/app_accounts)). The same limit is what developers report on r/Devvit: the display name can change, the slug cannot.
+
+This app is already installed and has posted puzzles as `contrarian-daily`:
+
+- Listing: https://developers.reddit.com/apps/contrarian-daily
+- Private playtest: https://www.reddit.com/r/contrarian_daily_dev/?playtest=contrarian-daily
+- Public subreddit: https://www.reddit.com/r/FoldlineDaily/
+
+Uploading a second app named `foldline-daily` would start a new install with empty storage. The posts already on r/FoldlineDaily would stay on `contrarian-daily`. Leave the slug as it is. In the developer portal, set the display name to **Foldline Daily**. Do not publish the app for the hackathon.
 
 ## Architecture
 

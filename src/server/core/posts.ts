@@ -7,15 +7,7 @@ import { puzzleSignature } from '../../shared/puzzle';
 import { pickRoute } from './community';
 import { isSkipped, loadConfig, startDateFor, todayKey, type AppConfig } from './config';
 import { boardKeys, dayBoard, DAY_TTL_SECONDS, K } from './keys';
-import {
-  ensureThread,
-  fallbackText,
-  isPostId,
-  loadPostInfo,
-  publishPost,
-  savePostInfo,
-  type PostId,
-} from './postinfo';
+import { ensureThread, fallbackText, isPostId, loadPostInfo, publishPost, savePostInfo, type PostId } from './postinfo';
 
 const PENDING = 'pending:';
 /** A claim older than this belongs to a run that died; another run may take over. */
@@ -26,15 +18,9 @@ const REGENERATE_TRIES = 24;
 const OLD_BOARD_TTL_SECONDS = 30 * 86_400;
 
 export type PostOutcome =
-  | { status: 'created' | 'exists'; date: string; postId: PostId }
-  | { status: 'skipped' | 'busy' | 'before-start'; date: string };
+  { status: 'created' | 'exists'; date: string; postId: PostId } | { status: 'skipped' | 'busy' | 'before-start'; date: string };
 
-async function buildInfo(
-  date: string,
-  day: number,
-  rev: number,
-  config: AppConfig
-): Promise<PostInfo> {
+async function buildInfo(date: string, day: number, rev: number, config: AppConfig): Promise<PostInfo> {
   if (weekdayIndex(date) === 6 && config.routesEnabled && rev === 0) {
     const pick = await pickRoute(date).catch((error: unknown) => {
       console.warn('Community Route selection failed, using the generated puzzle:', error);
@@ -64,7 +50,12 @@ function generatedInfo(date: string, day: number, rev: number): PostInfo {
     day,
     rev,
     tier: made.tier,
-    puzzle: { turns: made.turns, start: made.start, goal: made.goal, par: made.par },
+    puzzle: {
+      turns: made.turns,
+      start: made.start,
+      goal: made.goal,
+      par: made.par,
+    },
     source: made.source,
   };
 }
@@ -95,8 +86,7 @@ export async function ensureDailyPost(now = Date.now(), forDate?: string): Promi
     const claimedAt = Number(current.slice(PENDING.length));
     if (Number.isFinite(claimedAt) && now - claimedAt < CLAIM_TTL_MS) return { status: 'busy', date };
     // Exactly one run may take over a given stale claim.
-    if ((await redis.hSetNX(K.claims, `${date}:${current}`, String(now))) !== 1)
-      return { status: 'busy', date };
+    if ((await redis.hSetNX(K.claims, `${date}:${current}`, String(now))) !== 1) return { status: 'busy', date };
     await redis.hSet(K.posts, { [date]: claim });
   } else if ((await redis.hSetNX(K.posts, date, claim)) !== 1) {
     return { status: 'busy', date };
@@ -115,7 +105,11 @@ export async function ensureDailyPost(now = Date.now(), forDate?: string): Promi
     const info = await buildInfo(date, day, rev, config);
     const post = await publishPost(info);
     await redis.hSet(K.posts, { [date]: post.id });
-    await redis.hSet(K.day(date), { postId: post.id, rev: String(rev), day: String(day) });
+    await redis.hSet(K.day(date), {
+      postId: post.id,
+      rev: String(rev),
+      day: String(day),
+    });
     await ensureThread(post.id);
     await expireDay(addDays(date, -1), DAY_TTL_SECONDS).catch((error: unknown) =>
       console.warn('Could not set expiry on the previous day:', error)
@@ -127,9 +121,22 @@ export async function ensureDailyPost(now = Date.now(), forDate?: string): Promi
   }
 }
 
-export type RegenerateOutcome =
-  | { status: 'done'; postId: PostId; rev: number; reposted: boolean }
-  | { status: 'no-post' };
+export type RegenerateOutcome = { status: 'done'; postId: PostId; rev: number; reposted: boolean } | { status: 'no-post' };
+
+/**
+ * The next generated puzzle for a day. Skips a revision that would republish
+ * the same paper. `hook` limits the search to puzzles whose title line matches,
+ * because a Reddit post title cannot be edited.
+ */
+export function replacementFor(date: string, day: number, rev: number, signature: string, hook: string | null): PostInfo | null {
+  for (let step = 1; step <= REGENERATE_TRIES; step++) {
+    const candidate = generatedInfo(date, day, rev + step);
+    if (puzzleSignature(candidate.puzzle) === signature) continue;
+    if (hook !== null && puzzleHook(candidate.puzzle) !== hook) continue;
+    return candidate;
+  }
+  return null;
+}
 
 /**
  * Replaces today's puzzle. The new revision gets a clean board; streak credit
@@ -146,27 +153,18 @@ export async function regenerateToday(now = Date.now()): Promise<RegenerateOutco
 
   const oldHook = puzzleHook(old.puzzle, old.author);
   const oldSignature = puzzleSignature(old.puzzle);
-  let next: PostInfo | null = null;
-  if (old.source !== 'community') {
-    for (let step = 1; step <= REGENERATE_TRIES && !next; step++) {
-      const candidate = generatedInfo(date, old.day, old.rev + step);
-      if (
-        puzzleHook(candidate.puzzle) === oldHook &&
-        puzzleSignature(candidate.puzzle) !== oldSignature
-      )
-        next = candidate;
-    }
-  }
+  const inPlace = old.source === 'community' ? null : replacementFor(date, old.day, old.rev, oldSignature, oldHook);
+  const next =
+    inPlace ?? replacementFor(date, old.day, old.rev, oldSignature, null) ?? generatedInfo(date, old.day, old.rev + REGENERATE_TRIES + 1);
 
   let newPostId = postId;
-  const reposted = !next;
-  if (next) {
+  const reposted = !inPlace;
+  if (inPlace) {
     const post = await reddit.getPostById(postId);
     await post.setPostData(toPostWire(next));
     await post.setTextFallback({ text: fallbackText(next) });
     await savePostInfo(postId, next);
   } else {
-    next = generatedInfo(date, old.day, old.rev + 1);
     const post = await publishPost(next);
     newPostId = post.id;
     await redis.hSet(K.posts, { [date]: post.id });
@@ -182,9 +180,9 @@ export async function regenerateToday(now = Date.now()): Promise<RegenerateOutco
     rev: String(next.rev),
     day: String(next.day),
   });
-  await Promise.all(
-    boardKeys(dayBoard(date, old.rev)).map((key) => redis.expire(key, OLD_BOARD_TTL_SECONDS))
-  ).catch((error: unknown) => console.warn('Could not expire the old board:', error));
+  await Promise.all(boardKeys(dayBoard(date, old.rev)).map((key) => redis.expire(key, OLD_BOARD_TTL_SECONDS))).catch((error: unknown) =>
+    console.warn('Could not expire the old board:', error)
+  );
   return { status: 'done', postId: newPostId, rev: next.rev, reposted };
 }
 

@@ -49,6 +49,12 @@ body,
   min-width: 0;
 }
 
+.hud__brand {
+  font-size: var(--t-sm);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
 .hud__count {
   font-size: 32px;
   font-weight: 700;
@@ -261,6 +267,13 @@ body,
   line-height: 1;
 }
 
+.dock__hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--t-sm);
+  text-align: center;
+}
+
 .dock__fold {
   display: flex;
   gap: 8px;
@@ -394,9 +407,25 @@ body,
   font-weight: 650;
 }
 
-.card__muted {
+.card__muted,
+.card__note {
   color: var(--muted);
   font-size: var(--t-sm);
+}
+
+.card__note {
+  margin: 0;
+}
+
+.card__grid {
+  margin: 8px 0 0;
+  padding: 12px;
+  overflow-x: auto;
+  border-radius: 12px;
+  background: var(--bg-2);
+  font-size: 1.25rem;
+  line-height: 1.35;
+  white-space: pre-wrap;
 }
 
 .card__streak {

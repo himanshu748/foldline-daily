@@ -11,9 +11,14 @@ export const forms = new Hono();
 
 const MAX_DAYS_AHEAD = 7;
 
+/** A checked Devvit boolean. The form has sent both a real boolean and the string "true". */
+export function formChecked(value: unknown): boolean {
+  return value === true || value === 'true';
+}
+
 forms.post('/regenerate', async (c) => {
   const values = (await c.req.json().catch(() => ({}))) as { confirm?: unknown };
-  if (values.confirm !== true)
+  if (!formChecked(values.confirm))
     return c.json<UiResponse>({ showToast: "Nothing changed. Today's puzzle was kept." });
   try {
     const outcome = await regenerateToday();

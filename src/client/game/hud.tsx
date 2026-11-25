@@ -15,6 +15,9 @@ export function Hud({ controller, progress, soundOn, onToggleSound, onFlip, onHe
   return (
     <header className="hud">
       <div className="hud__stats">
+        <span className="hud__brand">
+          Foldline{controller.info?.kind === 'daily' ? ` · Day ${controller.info.day}` : ''}
+        </span>
         <span className="hud__count num" aria-label={`${controller.folds} folds`}>{controller.folds}</span>
         {puzzle && <span className="hud__par">par <span className="num">{puzzle.par}</span></span>}
         <span className="hud__progress">{progress.inPlace} of {progress.total} in place</span>
@@ -144,6 +147,9 @@ export function HingeBar({ controller }: { controller: Controller }) {
           );
         })}
       </div>
+      {playable && controller.folds === 0 && !controller.practice && (
+        <p className="dock__hint">Drag a panel to fold it, or tap Fold up.</p>
+      )}
       <div className="dock__fold">
         <button
           className="btn btn--primary"
