@@ -21,10 +21,12 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-At phone width, the browser test opens the help with keyboard focus, solves a fixed
-board in five folds, checks the player's leaderboard row, and verifies that a practice
-solve leaves the first score in place. It uses the local harness with simulated Reddit
-endpoints. The public Reddit checks below cover the actual platform.
+At phone width, the browser tests open the help with keyboard focus, solve a fixed
+board in five folds, check the player's leaderboard row, and verify that a practice
+solve leaves the first score in place. They also simulate a signed-out visit and check
+that the solved board survives a reload and the login button calls the Reddit prompt.
+These tests use the local harness with simulated Reddit endpoints. The public Reddit
+checks below cover the actual platform.
 
 ## Still to check on Reddit
 
