@@ -63,7 +63,7 @@ export function App() {
       if (event.metaKey || event.ctrlKey || event.altKey) return;
       const target = event.target as HTMLElement | null;
       if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return;
-      if (helpOpen) return;
+      if (helpOpen || controller.solved) return;
       if (event.key === '?' || event.key === 'h' || event.key === 'H') {
         openHelp();
       } else if (/^[1-7]$/.test(event.key)) {
