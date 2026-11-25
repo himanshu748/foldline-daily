@@ -25,6 +25,11 @@ export function puzzleForPlay(cached: PostInfo | null, server: PostInfo | null):
   return { info: server, replaced };
 }
 
+/** A saved solve can be sent again after a network or server failure. */
+export function keepsPendingSolve(code: string | null): boolean {
+  return code !== 'invalid-moves' && code !== 'unsolved' && code !== 'stale';
+}
+
 export type PendingAction = 'submit' | 'restore' | 'drop' | 'keep';
 
 /**

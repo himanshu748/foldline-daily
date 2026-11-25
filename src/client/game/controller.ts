@@ -7,7 +7,7 @@ import { shareGrid } from '../../shared/share';
 import type { CompleteResponse, InitResponse } from '../../shared/api';
 import { api, ApiFailure } from '../lib/api';
 import { track } from '../lib/track';
-import { isPendingSolve, pendingAction, puzzleForPlay, type PendingSolve } from './session';
+import { isPendingSolve, keepsPendingSolve, pendingAction, puzzleForPlay, type PendingSolve } from './session';
 
 export type Phase = 'loading' | 'error' | 'play' | 'solved';
 
@@ -334,15 +334,17 @@ export class Controller {
       this.phase = 'solved';
       this.emit();
     } catch (error) {
-      if (!(error instanceof ApiFailure)) return;
-      if (error.code === 'invalid-moves' || error.code === 'unsolved' || error.code === 'stale') {
+      const code = error instanceof ApiFailure ? error.code : null;
+      if (!keepsPendingSolve(code)) {
         this.clearPending();
         this.localResult = null;
-        this.submitError = error.code === 'stale' ? null : 'The server could not verify that solve. It was not saved.';
-        if (error.code === 'stale') this.stale = true;
+        this.submitError = code === 'stale' ? null : 'The server could not verify that solve. It was not saved.';
+        if (code === 'stale') this.stale = true;
         if (this.info) this.applyFresh(this.info);
-        this.emit();
+      } else {
+        this.submitError = 'Your result could not be saved yet.';
       }
+      this.emit();
     }
   }
 

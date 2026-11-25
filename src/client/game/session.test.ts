@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { PostInfo } from '../../shared/postdata';
-import { isPendingSolve, pendingAction, puzzleForPlay } from './session';
+import { isPendingSolve, keepsPendingSolve, pendingAction, puzzleForPlay } from './session';
 
 const puzzle = {
   turns: ['straight', 'straight', 'straight'] as const,
@@ -115,6 +115,20 @@ describe('pendingAction', () => {
         folded: false,
       })
     ).toBe('drop');
+  });
+});
+
+describe('keepsPendingSolve', () => {
+  it('keeps the solve when the save fails for a reason the player can retry', () => {
+    expect(keepsPendingSolve('offline')).toBe(true);
+    expect(keepsPendingSolve('server')).toBe(true);
+    expect(keepsPendingSolve(null)).toBe(true);
+  });
+
+  it('drops a solve the server will never accept', () => {
+    expect(keepsPendingSolve('invalid-moves')).toBe(false);
+    expect(keepsPendingSolve('unsolved')).toBe(false);
+    expect(keepsPendingSolve('stale')).toBe(false);
   });
 });
 
