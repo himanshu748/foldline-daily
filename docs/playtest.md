@@ -3,6 +3,7 @@
 - [Public demo post](https://www.reddit.com/r/FoldlineDaily/comments/1y1uv2a/day_1_six_panels_two_corners_par_7/)
 - [Private playtest](https://www.reddit.com/r/contrarian_daily_dev/?playtest=contrarian-daily)
 - [Devvit app listing](https://developers.reddit.com/apps/contrarian-daily)
+- [Original Foldline game for the port field](https://foldline-meta-start-2026.vercel.app/)
 
 The repo records a private v0.0.3 upload on Nov 21, 2026. That playtest covered the
 daily post and preview, first scored solve and practice end card, streak and flair,

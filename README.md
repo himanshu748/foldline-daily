@@ -40,7 +40,7 @@ The game is Foldline Daily. The Devvit listing slug is `contrarian-daily`, the i
 
 ## Ported from Foldline
 
-Foldline Daily ports the puzzle engine from the original WebXR game **Foldline**.
+Foldline Daily ports the puzzle engine from the [original WebXR game](https://foldline-meta-start-2026.vercel.app/).
 The Reddit Game of the Day hackathon opened Nov 11, 2026. The dated history
 distinguishes the original game from the Reddit build.
 
