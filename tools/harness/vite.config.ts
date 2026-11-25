@@ -1,7 +1,13 @@
 import { fileURLToPath } from 'node:url';
 import react from '@vitejs/plugin-react';
 import { defineConfig, type Plugin } from 'vite';
-import type { CompleteRequest, FieldView, ResultView, StreakView } from '../../src/shared/api';
+import type {
+  CompleteRequest,
+  FieldView,
+  LeaderboardResponse,
+  ResultView,
+  StreakView,
+} from '../../src/shared/api';
 import { encodeMoves, parseMoves, replay } from '../../src/shared/moves';
 import { bucketFor, DIST_BUCKETS } from '../../src/shared/score';
 import { shareGrid } from '../../src/shared/share';
@@ -9,6 +15,7 @@ import { harnessPuzzle } from './puzzle';
 
 const date = process.env.FOLDLINE_DATE ?? '2026-11-19';
 const { puzzle, post } = harnessPuzzle(date);
+const playerName = 'harness';
 const emptyStreak: StreakView = { current: 0, best: 0, tier: null, nextTier: null };
 const emptyField: FieldView = { total: 0, rank: null, dist: Array(DIST_BUCKETS).fill(0), standing: null };
 let startedAt: number | null = null;
@@ -38,7 +45,7 @@ function mockApi(): Plugin {
             case '/init':
               response = {
                 type: 'init', post, postId: 't3_harness', subreddit: 'foldline',
-                user: { loggedIn: true, name: 'harness' }, today: date, now: Date.now(),
+                user: { loggedIn: true, name: playerName }, today: date, now: Date.now(),
                 isToday: true, skipped: false, nextPuzzleInMs: 86400000, startedAt,
                 result, streak, field, flair: { enabled: false, optedIn: false },
                 routes: { enabled: false, submitted: false }, subscribed: false, shared: false,
@@ -75,9 +82,27 @@ function mockApi(): Plugin {
               };
               break;
             }
-            case '/leaderboard':
-              response = { type: 'leaderboard', total: 0, rows: [], me: null };
+            case '/leaderboard': {
+              const rows = result
+                ? [
+                    {
+                      rank: 1,
+                      name: playerName,
+                      folds: result.folds,
+                      ms: result.ms,
+                      avatar: null,
+                      me: true,
+                    },
+                  ]
+                : [];
+              response = {
+                type: 'leaderboard',
+                total: rows.length,
+                rows,
+                me: null,
+              } satisfies LeaderboardResponse;
               break;
+            }
             case '/track':
               response = { type: 'track' };
               break;
