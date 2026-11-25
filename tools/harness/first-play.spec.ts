@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import type { InitResponse } from '../../src/shared/api';
 
 async function solveFixture(page: Page) {
   // The shortest solution for the harness board dated 2026-11-19.
@@ -39,4 +40,43 @@ test('keyboard help, first score, and practice at phone width', async ({ page })
   await solveFixture(page);
   await expect(result.getByText('Your score today stays 5 folds.')).toBeVisible();
   expect(errors).toEqual([]);
+});
+
+test('a signed-out solve survives reload and offers the Reddit login prompt', async ({ page }) => {
+  await page.route('**/api/init', async (route) => {
+    const response = await route.fetch();
+    const init: InitResponse = await response.json();
+    await route.fulfill({
+      response,
+      json: {
+        ...init,
+        user: { loggedIn: false, name: null },
+        startedAt: null,
+        result: null,
+        field: { ...init.field, rank: null, standing: null },
+      } satisfies InitResponse,
+    });
+  });
+  await page.route('**/api/attempt/complete', (route) =>
+    route.fulfill({
+      status: 401,
+      json: { status: 'error', code: 'login', message: 'Log in to Reddit to save your result.' },
+    })
+  );
+
+  await page.goto('/src/client/game.html');
+  const rejectedSave = page.waitForResponse('**/api/attempt/complete');
+  await solveFixture(page);
+  expect((await rejectedSave).status()).toBe(401);
+
+  const result = page.getByRole('dialog', { name: /5 folds, par 5/ });
+  const login = result.getByRole('button', { name: 'Log in to comment' });
+  await expect(login).toBeVisible();
+  await expect(result.getByRole('button', { name: 'Comment your result' })).toHaveCount(0);
+
+  await page.reload();
+  await expect(login).toBeVisible();
+  const prompt = page.waitForEvent('console', (message) => message.text() === 'showLoginPrompt');
+  await login.click();
+  await prompt;
 });
