@@ -34,7 +34,9 @@ This opens the local puzzle with a simulated Reddit backend.
 [Demo subreddit](https://www.reddit.com/r/FoldlineDaily/) ·
 [Devvit app listing](https://developers.reddit.com/apps/contrarian-daily) ·
 [Development](docs/development.md) · [Playtest](docs/playtest.md) ·
-[BSD-3-Clause template notice](LICENSE-devvit-template.md)
+[License](LICENSE)
+
+The game is Foldline Daily. The Devvit listing slug is `contrarian-daily`, the id Reddit assigned when the app was first uploaded. That slug cannot be renamed. Details are in [Development](docs/development.md#devvit-app-name).
 
 ## Ported from Foldline
 
