@@ -24,7 +24,6 @@ Devvit Journeys calls were observed in playtest, which returns
 
 ## Record the demo
 
-On a phone-sized viewport, open an actual daily post, show its feed preview, and
-solve the puzzle with real drags. Show the result against par and the spoiler-free
-comment, then show the leaderboard or a Community Route. Keep the run under a minute
-and use the public demo post that appears in the recording.
+The 45-second shot list is [demo-shot-list.md](demo-shot-list.md). Record it from the
+public demo post on a phone-sized viewport. The private playtest URL uses the
+registered slug `contrarian-daily`. Say Foldline in the recording.
