@@ -7,6 +7,11 @@
 Foldline Daily is a paper-folding puzzle inside a Reddit post. Each day brings a new
 shape. Fewest folds wins, with time breaking ties.
 
+[Play on Reddit](https://www.reddit.com/r/FoldlineDaily/comments/1y1uv2a/day_1_six_panels_two_corners_par_7/) ·
+[Gameplay clip](docs/demo-video.mp4) · [Devpost](https://devpost.com/software/foldline-daily)
+
+The gameplay clip shows a complete solve in the local harness.
+
 ## How to play
 
 1. [Open a puzzle on Reddit](https://www.reddit.com/r/FoldlineDaily/comments/1y1uv2a/day_1_six_panels_two_corners_par_7/) and look for the outline on the mat.
