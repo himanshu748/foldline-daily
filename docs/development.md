@@ -2,10 +2,10 @@
 
 Use Node 24.18 or newer.
 
-~~~sh
+```sh
 npm ci
 npm run typecheck && npm run lint && npm test && npm run build && npm run size
-~~~
+```
 
 For a local browser session, run `npm run harness -- --open /src/client/game.html`.
 The harness runs the game with local endpoints and does not create Reddit results.

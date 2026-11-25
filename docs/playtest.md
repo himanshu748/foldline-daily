@@ -16,7 +16,7 @@ was created and Day 1 posted on the same date.
 - [ ] Check a populated leaderboard, the player's row, rank, and distribution chart.
 - [ ] Check signed-out play through the result screen and the sign-in prompt.
 - [ ] Confirm the Join fallback opens the subreddit. Reddit blocks in-app subscription
-  until the app is approved.
+      until the app is approved.
 - [ ] Verify that the regenerate moderator action replaces the right daily puzzle.
 
 Devvit Journeys calls were observed in playtest, which returns
