@@ -14,7 +14,7 @@ function Row({ row }: { row: LeaderboardRow }) {
       )}
       <span className="board__name">{row.me ? `${row.name} (you)` : row.name}</span>
       <span className="board__score num">
-        {row.folds}, {formatTime(row.ms)}
+        {row.folds} {row.folds === 1 ? 'fold' : 'folds'}, {formatTime(row.ms)}
       </span>
     </li>
   );
@@ -33,18 +33,18 @@ export function Leaderboard() {
       alive = false;
     };
   }, []);
-  if (failed) return null;
   return (
-    <section className="board" aria-label="Today's leaderboard">
-      <h3 className="board__title">Today&rsquo;s leaders</h3>
-      {!data && <p className="board__empty">Loading the field…</p>}
-      {data && data.total === 0 && <p className="board__empty">Be the first today.</p>}
-      {data && data.total > 0 && (
+    <section className="board" aria-label="Leaderboard">
+      <h3 className="board__title">Leaderboard</h3>
+      {failed && <p className="board__empty">The leaderboard did not load.</p>}
+      {!failed && !data && <p className="board__empty">Loading the field…</p>}
+      {!failed && data && data.total === 0 && <p className="board__empty">Be the first on the board.</p>}
+      {!failed && data && data.total > 0 && (
         <ol className="board__list">
           {data.rows.map((row) => (
             <Row key={row.rank} row={row} />
           ))}
-          {data.me && <Row key="me" row={data.me} />}
+          {data.me && !data.rows.some((row) => row.me || row.name === data.me?.name) && <Row key="me" row={data.me} />}
         </ol>
       )}
     </section>

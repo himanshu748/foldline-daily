@@ -107,7 +107,7 @@ export function Stage({ controller, sceneRef, onProgress }: StageProps) {
     if (ready && scene) setHingePositions(positions(scene, canvasRef.current));
   }, [controller.version, ready, sceneRef]);
 
-  const showHand = ready && controller.phase === 'play' && controller.folds === 0;
+  const showHand = ready && !reducedMotion && controller.phase === 'play' && controller.folds === 0;
   // Position updates come from event callbacks only (resize, view flip, scene load).
   useEffect(() => {
     const update = () => {
