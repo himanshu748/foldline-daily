@@ -4,6 +4,7 @@ import { bucketFor, DIST_BUCKETS, formatTime, resultNote } from '../../shared/sc
 import { ApiFailure, api } from '../lib/api';
 import type { Controller } from './controller';
 import { Leaderboard } from './leaderboard';
+import { ModalSheet } from './modal-sheet';
 
 const RouteEditor = lazy(() => import('../editor/route-editor').then((mod) => ({ default: mod.RouteEditor })));
 
@@ -129,7 +130,7 @@ export function EndCard({ controller }: { controller: Controller }) {
   };
 
   return (
-    <div className="sheet" role="dialog" aria-modal="true" aria-label="Puzzle result">
+    <ModalSheet titleId="result-title">
       <div className="sheet__card">
         <header className="card__head">
           <p className="card__kicker">
@@ -137,7 +138,7 @@ export function EndCard({ controller }: { controller: Controller }) {
             {reason === 'skipped' && ', skipped day, practice only'}
             {(reason === 'practice' || practiceFolds !== null) && ', practice run'}
           </p>
-          <h2 className="card__title">
+          <h2 className="card__title" id="result-title" tabIndex={-1}>
             <span className="num">{shownFolds}</span> {shownFolds === 1 ? 'fold' : 'folds'}
             <span className="card__par">, par {result.par}</span>
           </h2>
@@ -288,6 +289,6 @@ export function EndCard({ controller }: { controller: Controller }) {
           />
         </Suspense>
       )}
-    </div>
+    </ModalSheet>
   );
 }

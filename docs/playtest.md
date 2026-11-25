@@ -11,6 +11,21 @@ spoiler-free result comment, Community Route validation and a playable route pos
 and the skip, undo-skip, and specific-date moderator actions. The public subreddit
 was created and Day 1 posted on the same date.
 
+## Repeatable local playthrough
+
+From a fresh checkout with Node 24.18 or newer:
+
+```sh
+npm ci
+npx playwright install chromium
+npm run test:e2e
+```
+
+At phone width, the browser test opens the help with keyboard focus, solves a fixed
+board in five folds, checks the player's leaderboard row, and verifies that a practice
+solve leaves the first score in place. It uses the local harness with simulated Reddit
+endpoints. The public Reddit checks below cover the actual platform.
+
 ## Still to check on Reddit
 
 - [ ] Play and solve a public puzzle from a regular Reddit account.

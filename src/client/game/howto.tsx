@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { ModalSheet } from './modal-sheet';
 
 interface HowToProps {
   par: number | null;
@@ -6,33 +6,10 @@ interface HowToProps {
 }
 
 export function HowTo({ par, onClose }: HowToProps) {
-  const startRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    const previous = document.activeElement as HTMLElement | null;
-    startRef.current?.focus({ preventScroll: true });
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => {
-      window.removeEventListener('keydown', onKey);
-      previous?.focus?.({ preventScroll: true });
-    };
-  }, [onClose]);
-
   return (
-    <div
-      className="sheet sheet--top"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="howto-title"
-      onClick={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
-    >
+    <ModalSheet titleId="howto-title" onDismiss={onClose}>
       <div className="sheet__card howto">
-        <h2 className="card__title" id="howto-title">
+        <h2 className="card__title" id="howto-title" tabIndex={-1}>
           Fold the paper into the shape
         </h2>
         <ol className="howto__steps">
@@ -62,7 +39,7 @@ export function HowTo({ par, onClose }: HowToProps) {
           </li>
         </ol>
         <div className="card__actions">
-          <button ref={startRef} className="btn btn--primary" onClick={onClose}>
+          <button className="btn btn--primary" onClick={onClose}>
             Start folding
           </button>
         </div>
@@ -70,6 +47,6 @@ export function HowTo({ par, onClose }: HowToProps) {
           Keys: 1 to 7 pick a hinge, arrows fold, Z undo, V flip view, ? this help.
         </p>
       </div>
-    </div>
+    </ModalSheet>
   );
 }
