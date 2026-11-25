@@ -12,3 +12,6 @@ export const exitExpandedMode = (...args: unknown[]) => console.log('exitExpande
 export const navigateTo = (...args: unknown[]) => console.log('navigateTo', ...args);
 export const showLoginPrompt = (...args: unknown[]) => console.log('showLoginPrompt', ...args);
 export const showToast = (...args: unknown[]) => console.log('showToast', ...args);
+
+// Reddit is the only client that can grant account permissions.
+export const canRunAsUser = async () => false;
