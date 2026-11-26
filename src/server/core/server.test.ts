@@ -610,6 +610,48 @@ describe('flair, sharing and tracking', () => {
     expect(journey?.endRequest).toMatchObject({ complete: true, game: { win: true, score: 4 } });
   });
 
+  test('a failed solve counter does not hide the score or streak credit', async () => {
+    const { info, board } = await todaysPost();
+    const increment = redis.hIncrBy.bind(redis);
+    const counter = vi.spyOn(redis, 'hIncrBy').mockImplementation((key, field, amount) =>
+      key === K.funnel(TODAY) && field === 'attempt_complete'
+        ? Promise.reject(new Error('counter unavailable'))
+        : increment(key, field, amount)
+    );
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const result = await complete(info, board, alice, solution(info));
+      expect(result).toMatchObject({ scored: true, streakExtended: true });
+      expect(await redis.zCard(K.lb(board))).toBe(1);
+      expect(warn).toHaveBeenCalledWith('Solve analytics could not be recorded:', expect.any(Error));
+    } finally {
+      warn.mockRestore();
+      counter.mockRestore();
+    }
+  });
+
+  test('a failed share counter preserves the comment receipt', async () => {
+    const { info, board, postId } = await todaysPost();
+    await complete(info, board, alice, solution(info));
+    await redis.hSet(K.threads, { [postId]: 't1_thread' });
+    const submit = vi.spyOn(reddit, 'submitComment').mockResolvedValue({
+      id: 't1_shared', authorName: 'alice',
+    } as unknown as Awaited<ReturnType<typeof reddit.submitComment>>);
+    const counter = vi.spyOn(redis, 'hIncrBy').mockRejectedValueOnce(new Error('counter unavailable'));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      expect(await shareResult(info, postId, board, alice, TODAY)).toMatchObject({ status: 'posted' });
+      expect(await redis.hGet(K.shared(board), alice.id)).toBe('t1_shared');
+      expect(await shareResult(info, postId, board, alice, TODAY)).toMatchObject({ status: 'already' });
+      expect(submit).toHaveBeenCalledOnce();
+      expect(warn).toHaveBeenCalledWith('Share analytics could not be recorded:', expect.any(Error));
+    } finally {
+      warn.mockRestore();
+      counter.mockRestore();
+      submit.mockRestore();
+    }
+  });
+
   test('the funnel counts completions on the server, where they are verified', async () => {
     const { info, board } = await todaysPost();
     await complete(info, board, alice, solution(info));

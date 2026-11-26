@@ -141,7 +141,9 @@ export async function completeAttempt(input: CompleteInput, body: unknown): Prom
     await Promise.all([
       redis.zAdd(K.lb(board), { member: player.name, score: encodeScore(folds, ms) }),
       redis.hIncrBy(K.dist(board), String(bucketFor(folds, info.puzzle.par)), 1),
-      countEvent(today, 'attempt_complete'),
+      countEvent(today, 'attempt_complete').catch((error: unknown) =>
+        console.warn('Solve analytics could not be recorded:', error)
+      ),
     ]);
     // Only the current day's puzzle counts toward the streak.
     if (info.kind === 'daily' && info.date === today) {

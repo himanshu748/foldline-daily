@@ -56,7 +56,9 @@ export async function shareResult(
     }
     await Promise.all([
       redis.hSet(K.shared(board), { [player.id]: comment.id }),
-      countEvent(today, 'share_comment'),
+      countEvent(today, 'share_comment').catch((error: unknown) =>
+        console.warn('Share analytics could not be recorded:', error)
+      ),
     ]);
     return { type: 'share', status: 'posted', asUser };
   } catch (error) {
