@@ -86,12 +86,16 @@ export async function ensureThread(postId: PostId): Promise<`t1_${string}` | nul
     await redis.hDel(K.threads, [postId]);
     return null;
   }
-  await redis.hSet(K.threads, { [postId]: comment.id }).catch((error: unknown) => {
+  try {
+    await comment.distinguish(true);
+  } catch (error) {
+    console.warn('Results thread could not be stickied:', error);
+  }
+  try {
+    await redis.hSet(K.threads, { [postId]: comment.id });
+  } catch (error) {
     // Reddit already created the comment. Keep the claim so a retry cannot create another.
     console.warn('Results thread receipt could not be saved:', error);
-  });
-  await comment.distinguish(true).catch((error: unknown) => {
-    console.warn('Results thread could not be stickied:', error);
-  });
+  }
   return comment.id;
 }
