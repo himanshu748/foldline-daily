@@ -633,6 +633,7 @@ describe('flair, sharing and tracking', () => {
   test('a failed share counter preserves the comment receipt', async () => {
     const { info, board, postId } = await todaysPost();
     await complete(info, board, alice, solution(info));
+    await redis.hSet(K.threads, { [postId]: 't1_thread' });
     const submit = vi.spyOn(reddit, 'submitComment').mockResolvedValue({
       id: 't1_shared', authorName: 'alice',
     } as unknown as Awaited<ReturnType<typeof reddit.submitComment>>);
