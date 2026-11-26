@@ -652,6 +652,28 @@ describe('flair, sharing and tracking', () => {
     }
   });
 
+  test('a failed receipt write does not let a confirmed share post twice', async () => {
+    const { info, board, postId } = await todaysPost();
+    await complete(info, board, alice, solution(info));
+    await redis.hSet(K.threads, { [postId]: 't1_thread' });
+    const submit = vi.spyOn(reddit, 'submitComment').mockResolvedValue({
+      id: 't1_shared', authorName: 'alice',
+    } as unknown as Awaited<ReturnType<typeof reddit.submitComment>>);
+    const save = vi.spyOn(redis, 'hSet').mockRejectedValueOnce(new Error('receipt write failed'));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      expect(await shareResult(info, postId, board, alice, TODAY)).toMatchObject({ status: 'posted' });
+      expect(await redis.hGet(K.shared(board), alice.id)).toBe('pending');
+      expect(await shareResult(info, postId, board, alice, TODAY)).toMatchObject({ status: 'already' });
+      expect(submit).toHaveBeenCalledOnce();
+      expect(warn).toHaveBeenCalledWith('Share receipt could not be saved:', expect.any(Error));
+    } finally {
+      warn.mockRestore();
+      save.mockRestore();
+      submit.mockRestore();
+    }
+  });
+
   test('the funnel counts completions on the server, where they are verified', async () => {
     const { info, board } = await todaysPost();
     await complete(info, board, alice, solution(info));
