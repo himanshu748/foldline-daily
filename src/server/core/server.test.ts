@@ -265,6 +265,27 @@ describe('moderator tools', () => {
     expect(again).toMatchObject({ scored: true, streakExtended: false });
   });
 
+  test('regenerate commits the new revision even when the fallback refresh fails', async ({ mocks }) => {
+    const before = await todaysPost();
+    const post = await reddit.getPostById(before.postId);
+    const lookup = vi.spyOn(reddit, 'getPostById').mockResolvedValueOnce(post);
+    const fallback = vi.spyOn(post, 'setTextFallback').mockRejectedValueOnce(new Error('fallback unavailable'));
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const outcome = await regenerateToday(NOW + 1000);
+      expect(outcome).toMatchObject({ status: 'done', postId: before.postId, reposted: false });
+      if (outcome.status !== 'done') throw new Error('puzzle was not regenerated');
+      expect(fallback).toHaveBeenCalledOnce();
+      expect(parsePostWire(mocks.reddit.linksAndComments.getPostData(before.postId))?.rev).toBe(outcome.rev);
+      expect((await loadPostInfo(before.postId))?.rev).toBe(outcome.rev);
+      expect(await redis.hGet(K.day(TODAY), 'rev')).toBe(String(outcome.rev));
+    } finally {
+      warning.mockRestore();
+      fallback.mockRestore();
+      lookup.mockRestore();
+    }
+  });
+
   test('regenerate without a post reports it', async () => {
     expect(await regenerateToday(NOW)).toEqual({ status: 'no-post' });
   });

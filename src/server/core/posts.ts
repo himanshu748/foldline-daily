@@ -162,7 +162,9 @@ export async function regenerateToday(now = Date.now()): Promise<RegenerateOutco
   if (inPlace) {
     const post = await reddit.getPostById(postId);
     await post.setPostData(toPostWire(next));
-    await post.setTextFallback({ text: fallbackText(next) });
+    await post.setTextFallback({ text: fallbackText(next) }).catch((error: unknown) =>
+      console.warn('The regenerated post fallback text could not be refreshed:', error)
+    );
     await savePostInfo(postId, next);
   } else {
     const post = await publishPost(next);
