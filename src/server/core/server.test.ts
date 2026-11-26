@@ -18,7 +18,7 @@ import { ApiError } from './errors';
 import { setFlairOptIn } from './flair';
 import { boardFor, dayBoard, K } from './keys';
 import { ensureDailyPost, regenerateToday, replacementFor } from './posts';
-import { loadPostInfo } from './postinfo';
+import { ensureThread, loadPostInfo } from './postinfo';
 import { completeAttempt, fieldView, leaderboard, loadResult, startAttempt } from './results';
 import { shareResult } from './share';
 import { track } from './track';
@@ -105,6 +105,27 @@ describe('daily post job', () => {
     await redis.hSet(K.posts, { [TODAY]: `pending:${NOW - 600_000}` });
     const outcomes = await Promise.all(Array.from({ length: 5 }, () => ensureDailyPost(NOW)));
     expect(outcomes.filter((outcome) => outcome.status === 'created')).toHaveLength(1);
+  });
+
+  test('does not create a second results thread after Reddit confirms the first', async () => {
+    const postId = 't3_thread';
+    const original = vi.spyOn(reddit, 'submitComment').mockResolvedValue({
+      id: 't1_first',
+      distinguish: async () => {},
+    } as unknown as Awaited<ReturnType<typeof reddit.submitComment>>);
+    const save = vi.spyOn(redis, 'hSet').mockRejectedValueOnce(new Error('receipt write failed'));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      expect(await ensureThread(postId)).toBe('t1_first');
+      expect(await redis.hGet(K.threads, postId)).toBe('pending');
+      expect(await ensureThread(postId)).toBeNull();
+      expect(original).toHaveBeenCalledOnce();
+      expect(warn).toHaveBeenCalledWith('Results thread receipt could not be saved:', expect.any(Error));
+    } finally {
+      original.mockRestore();
+      save.mockRestore();
+      warn.mockRestore();
+    }
   });
 
   test('skipped days and days before the start date get no post', async () => {
