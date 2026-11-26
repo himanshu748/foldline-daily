@@ -67,6 +67,15 @@ async function expireDay(date: string, seconds: number): Promise<void> {
   await Promise.all(keys.map((key) => redis.expire(key, seconds)));
 }
 
+async function setupResultsThread(postId: PostId): Promise<void> {
+  try {
+    await ensureThread(postId);
+  } catch (error) {
+    // A thread is optional once Reddit confirms the puzzle post.
+    console.warn('Results thread setup failed for puzzle post:', error);
+  }
+}
+
 /**
  * Creates the post for a date unless it exists or the day is skipped. Safe to
  * call from overlapping runs: only the run that wins the HSETNX claim posts.
@@ -110,7 +119,7 @@ export async function ensureDailyPost(now = Date.now(), forDate?: string): Promi
       rev: String(rev),
       day: String(day),
     });
-    await ensureThread(post.id);
+    await setupResultsThread(post.id);
     await expireDay(addDays(date, -1), DAY_TTL_SECONDS).catch((error: unknown) =>
       console.warn('Could not set expiry on the previous day:', error)
     );
@@ -170,7 +179,7 @@ export async function regenerateToday(now = Date.now()): Promise<RegenerateOutco
     const post = await publishPost(next);
     newPostId = post.id;
     await redis.hSet(K.posts, { [date]: post.id });
-    await ensureThread(post.id);
+    await setupResultsThread(post.id);
     try {
       await (await reddit.getPostById(postId)).delete();
     } catch (error) {
