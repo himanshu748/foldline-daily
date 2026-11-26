@@ -78,18 +78,24 @@ export async function ensureThread(postId: PostId): Promise<`t1_${string}` | nul
   if (existing?.startsWith('t1_')) return existing as `t1_${string}`;
   if (existing) return null;
   if ((await redis.hSetNX(K.threads, postId, 'pending')) !== 1) return null;
+  let comment: Awaited<ReturnType<typeof reddit.submitComment>>;
   try {
-    const comment = await reddit.submitComment({ id: postId, text: THREAD_TEXT });
-    try {
-      await comment.distinguish(true);
-    } catch (error) {
-      console.warn('Results thread could not be stickied:', error);
-    }
-    await redis.hSet(K.threads, { [postId]: comment.id });
-    return comment.id;
+    comment = await reddit.submitComment({ id: postId, text: THREAD_TEXT });
   } catch (error) {
     console.warn('Results thread could not be created:', error);
     await redis.hDel(K.threads, [postId]);
     return null;
   }
+  try {
+    await comment.distinguish(true);
+  } catch (error) {
+    console.warn('Results thread could not be stickied:', error);
+  }
+  try {
+    await redis.hSet(K.threads, { [postId]: comment.id });
+  } catch (error) {
+    // Reddit already created the comment. Keep the claim so a retry cannot create another.
+    console.warn('Results thread receipt could not be saved:', error);
+  }
+  return comment.id;
 }
