@@ -14,8 +14,9 @@ export const postUrl = (subreddit: string, postId: string): string =>
   `https://www.reddit.com/r/${subreddit}/comments/${postId.replace(/^t3_/, '')}`;
 
 /**
- * A post's puzzle. Redis holds the authoritative copy; `postData` (sent to the
- * client by the platform) is the fallback for posts older than this record.
+ * A post's puzzle. Redis holds the authoritative copy when present. Use the
+ * attached Reddit post data if it was supplied by the client context or the
+ * cached record is missing.
  */
 export async function loadPostInfo(postId: string, fallback?: unknown): Promise<PostInfo | null> {
   const raw = await redis.get(K.post(postId));
@@ -27,7 +28,15 @@ export async function loadPostInfo(postId: string, fallback?: unknown): Promise<
       // Fall through to postData.
     }
   }
-  return parsePostWire(fallback);
+  const supplied = parsePostWire(fallback);
+  if (supplied || !isPostId(postId)) return supplied;
+  try {
+    const post = await reddit.getPostById(postId);
+    return parsePostWire(await post.getPostData());
+  } catch (error) {
+    console.warn('Could not read puzzle data from the Reddit post:', error);
+    return null;
+  }
 }
 
 export async function savePostInfo(postId: string, info: PostInfo): Promise<void> {
@@ -61,7 +70,12 @@ export async function publishPost(
     },
     ...(asUser ? { runAs: 'USER' as const, userGeneratedContent: { text: asUser.text } } : {}),
   });
-  await savePostInfo(post.id, info);
+  try {
+    await savePostInfo(post.id, info);
+  } catch (error) {
+    // Reddit already has the puzzle in postData. Let the caller record the confirmed post ID.
+    console.warn('Published puzzle could not be cached:', error);
+  }
   return { id: post.id, authorName: post.authorName, permalink: post.permalink };
 }
 
