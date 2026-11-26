@@ -101,6 +101,30 @@ describe('daily post job', () => {
     expect((await ensureDailyPost(NOW + 1)).status).toBe('created');
   });
 
+  test('keeps a confirmed daily post and recovers its puzzle when caching fails', async () => {
+    const write = redis.set.bind(redis);
+    const cache = vi.spyOn(redis, 'set').mockImplementation((key, value, options) =>
+      key.startsWith('fl:post:') ? Promise.reject(new Error('cache unavailable')) : write(key, value, options)
+    );
+    const submit = vi.spyOn(reddit, 'submitCustomPost');
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const outcome = await ensureDailyPost(NOW);
+      expect(outcome.status).toBe('created');
+      if (outcome.status !== 'created') throw new Error('Expected a confirmed daily post');
+      expect(await redis.get(K.post(outcome.postId))).toBeUndefined();
+      expect(await redis.hGet(K.posts, TODAY)).toBe(outcome.postId);
+      expect(await loadPostInfo(outcome.postId)).toMatchObject({ date: TODAY, day: 3, rev: 0 });
+      expect(await ensureDailyPost(NOW + 180_000)).toEqual({ ...outcome, status: 'exists' });
+      expect(submit).toHaveBeenCalledOnce();
+      expect(warn).toHaveBeenCalledWith('Published puzzle could not be cached:', expect.any(Error));
+    } finally {
+      warn.mockRestore();
+      submit.mockRestore();
+      cache.mockRestore();
+    }
+  });
+
   test('a stale claim from a dead run is taken over once', async () => {
     await redis.hSet(K.posts, { [TODAY]: `pending:${NOW - 600_000}` });
     const outcomes = await Promise.all(Array.from({ length: 5 }, () => ensureDailyPost(NOW)));
