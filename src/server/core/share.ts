@@ -55,7 +55,10 @@ export async function shareResult(
       }
     }
     await Promise.all([
-      redis.hSet(K.shared(board), { [player.id]: comment.id }),
+      redis.hSet(K.shared(board), { [player.id]: comment.id }).catch((error: unknown) => {
+        // Reddit already confirmed the post. Keep the claim to prevent a duplicate.
+        console.warn('Share receipt could not be saved:', error);
+      }),
       countEvent(today, 'share_comment').catch((error: unknown) =>
         console.warn('Share analytics could not be recorded:', error)
       ),
