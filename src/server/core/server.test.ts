@@ -125,6 +125,28 @@ describe('daily post job', () => {
     }
   });
 
+  test('keeps a confirmed puzzle post when the results thread lookup fails', async () => {
+    const read = redis.hGet.bind(redis);
+    const thread = vi.spyOn(redis, 'hGet').mockImplementation((key, field) =>
+      key === K.threads ? Promise.reject(new Error('thread lookup unavailable')) : read(key, field)
+    );
+    const submit = vi.spyOn(reddit, 'submitCustomPost');
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const outcome = await ensureDailyPost(NOW);
+      expect(outcome.status).toBe('created');
+      if (outcome.status !== 'created') throw new Error('Expected a confirmed daily post');
+      expect(await redis.hGet(K.posts, TODAY)).toBe(outcome.postId);
+      expect(await ensureDailyPost(NOW + 180_000)).toEqual({ ...outcome, status: 'exists' });
+      expect(submit).toHaveBeenCalledOnce();
+      expect(warn).toHaveBeenCalledWith('Results thread setup failed for puzzle post:', expect.any(Error));
+    } finally {
+      warn.mockRestore();
+      submit.mockRestore();
+      thread.mockRestore();
+    }
+  });
+
   test('a stale claim from a dead run is taken over once', async () => {
     await redis.hSet(K.posts, { [TODAY]: `pending:${NOW - 600_000}` });
     const outcomes = await Promise.all(Array.from({ length: 5 }, () => ensureDailyPost(NOW)));
