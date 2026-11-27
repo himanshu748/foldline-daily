@@ -152,6 +152,16 @@ body,
   touch-action: none;
 }
 
+.stage__fallback-note {
+  position: absolute;
+  inset: auto 0 0;
+  margin: 0;
+  padding: 6px 12px;
+  background: var(--bg-2);
+  font-size: var(--t-sm);
+  text-align: center;
+}
+
 .stage__hinge {
   position: absolute;
   display: grid;
