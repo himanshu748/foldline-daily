@@ -125,6 +125,28 @@ describe('daily post job', () => {
     }
   });
 
+  test('recovers a confirmed daily post when updating the post index fails', async () => {
+    const write = redis.hSet.bind(redis);
+    const index = vi.spyOn(redis, 'hSet').mockImplementation((key, fields) =>
+      key === K.posts ? Promise.reject(new Error('post index unavailable')) : write(key, fields)
+    );
+    const submit = vi.spyOn(reddit, 'submitCustomPost');
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const outcome = await ensureDailyPost(NOW);
+      if (outcome.status !== 'created') throw new Error('Expected a confirmed daily post');
+      expect(await redis.hGet(K.day(TODAY), 'postId')).toBe(outcome.postId);
+      expect(await ensureDailyPost(NOW + 180_000)).toEqual({ ...outcome, status: 'exists' });
+      index.mockRestore();
+      expect(await ensureDailyPost(NOW + 360_000)).toEqual({ ...outcome, status: 'exists' });
+      expect(submit).toHaveBeenCalledOnce();
+    } finally {
+      warn.mockRestore();
+      submit.mockRestore();
+      index.mockRestore();
+    }
+  });
+
   test('recovers the current Reddit puzzle when the cache read fails', async () => {
     const before = await todaysPost();
     const regenerated = await regenerateToday(NOW + 1000);

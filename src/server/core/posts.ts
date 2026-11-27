@@ -76,6 +76,12 @@ async function setupResultsThread(postId: PostId): Promise<void> {
   }
 }
 
+async function confirmedDailyPost(date: string, indexed: string | undefined): Promise<PostId | undefined> {
+  if (isPostId(indexed)) return indexed;
+  const receipt = await redis.hGet(K.day(date), 'postId');
+  return isPostId(receipt) ? receipt : undefined;
+}
+
 /**
  * Creates the post for a date unless it exists or the day is skipped. Safe to
  * call from overlapping runs: only the run that wins the HSETNX claim posts.
@@ -88,7 +94,8 @@ export async function ensureDailyPost(now = Date.now(), forDate?: string): Promi
   if (await isSkipped(date)) return { status: 'skipped', date };
 
   const current = await redis.hGet(K.posts, date);
-  if (isPostId(current)) return { status: 'exists', date, postId: current };
+  const existing = await confirmedDailyPost(date, current);
+  if (existing) return { status: 'exists', date, postId: existing };
 
   const claim = `${PENDING}${now}`;
   if (current) {
@@ -104,6 +111,7 @@ export async function ensureDailyPost(now = Date.now(), forDate?: string): Promi
   const release = async () => {
     if ((await redis.hGet(K.posts, date)) === claim) await redis.hDel(K.posts, [date]);
   };
+  let confirmed = false;
   try {
     const day = dayNumber(await startDateFor(config, today), date);
     if (day < 1) {
@@ -113,19 +121,23 @@ export async function ensureDailyPost(now = Date.now(), forDate?: string): Promi
     const rev = Number((await redis.hGet(K.day(date), 'rev')) ?? 0);
     const info = await buildInfo(date, day, rev, config);
     const post = await publishPost(info);
-    await redis.hSet(K.posts, { [date]: post.id });
-    await redis.hSet(K.day(date), {
-      postId: post.id,
-      rev: String(rev),
-      day: String(day),
-    });
+    confirmed = true;
+    const [index, receipt] = await Promise.allSettled([
+      redis.hSet(K.posts, { [date]: post.id }),
+      redis.hSet(K.day(date), { postId: post.id, rev: String(rev), day: String(day) }),
+    ]);
+    if (index.status === 'rejected' && receipt.status === 'rejected') {
+      throw new AggregateError([index.reason, receipt.reason], `Could not record confirmed puzzle ${post.id}`);
+    }
+    if (index.status === 'rejected') console.warn('Could not update the puzzle post index:', index.reason);
+    if (receipt.status === 'rejected') console.warn('Could not update the daily puzzle metadata:', receipt.reason);
     await setupResultsThread(post.id);
     await expireDay(addDays(date, -1), DAY_TTL_SECONDS).catch((error: unknown) =>
       console.warn('Could not set expiry on the previous day:', error)
     );
     return { status: 'created', date, postId: post.id };
   } catch (error) {
-    await release();
+    if (!confirmed) await release();
     throw error;
   }
 }
@@ -155,8 +167,8 @@ export function replacementFor(date: string, day: number, rev: number, signature
 export async function regenerateToday(now = Date.now()): Promise<RegenerateOutcome> {
   const config = await loadConfig();
   const date = todayKey(config, now);
-  const postId = await redis.hGet(K.posts, date);
-  if (!isPostId(postId)) return { status: 'no-post' };
+  const postId = await confirmedDailyPost(date, await redis.hGet(K.posts, date));
+  if (!postId) return { status: 'no-post' };
   const old = await loadPostInfo(postId);
   if (!old || old.kind !== 'daily') return { status: 'no-post' };
 
