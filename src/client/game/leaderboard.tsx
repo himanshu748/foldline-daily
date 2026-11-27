@@ -23,6 +23,7 @@ function Row({ row }: { row: LeaderboardRow }) {
 export function Leaderboard() {
   const [data, setData] = useState<LeaderboardResponse | null>(null);
   const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let alive = true;
     api
@@ -32,11 +33,25 @@ export function Leaderboard() {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [attempt]);
   return (
     <section className="board" aria-label="Leaderboard">
       <h3 className="board__title">Leaderboard</h3>
-      {failed && <p className="board__empty">The leaderboard did not load.</p>}
+      {failed && (
+        <p className="board__empty">
+          The leaderboard did not load.{' '}
+          <button
+            type="button"
+            className="card__link"
+            onClick={() => {
+              setFailed(false);
+              setAttempt((current) => current + 1);
+            }}
+          >
+            Retry leaderboard
+          </button>
+        </p>
+      )}
       {!failed && !data && <p className="board__empty">Loading the field…</p>}
       {!failed && data && data.total === 0 && <p className="board__empty">Be the first on the board.</p>}
       {!failed && data && data.total > 0 && (

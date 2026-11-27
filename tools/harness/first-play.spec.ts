@@ -97,6 +97,29 @@ test('a saved solve stays visible when the leaderboard comparison is unavailable
   await expect(result.getByRole('button', { name: 'Comment your result' })).toBeVisible();
 });
 
+test('the result stays visible when a stalled leaderboard needs a retry', async ({ page }) => {
+  await page.route('**/api/init', async (route) => {
+    const response = await route.fetch();
+    const init: InitResponse = await response.json();
+    await route.fulfill({ response, json: { ...init, startedAt: null, result: null } });
+  });
+  let reads = 0;
+  await page.route('**/api/leaderboard', async (route) => {
+    // Leave only the first request open, so the client must stop waiting on it.
+    if (++reads > 1) await route.continue();
+  });
+
+  await page.goto('/src/client/game.html');
+  await solveFixture(page);
+  const result = page.getByRole('dialog', { name: /5 folds, par 5/ });
+  const leaderboard = result.getByRole('region', { name: 'Leaderboard' });
+  await expect(leaderboard.getByText('The leaderboard did not load.')).toBeVisible({ timeout: 6_000 });
+  await expect(result.getByRole('button', { name: 'Comment your result' })).toBeVisible();
+  await leaderboard.getByRole('button', { name: 'Retry leaderboard' }).click();
+  await expect(leaderboard.getByText('harness (you)')).toBeVisible();
+  expect(reads).toBe(2);
+});
+
 test('a signed-out solve survives reload and offers the Reddit login prompt', async ({ page }) => {
   await page.route('**/api/init', async (route) => {
     const response = await route.fetch();
