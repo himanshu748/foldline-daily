@@ -97,6 +97,37 @@ test('a saved solve stays visible when the leaderboard comparison is unavailable
   await expect(result.getByRole('button', { name: 'Comment your result' })).toBeVisible();
 });
 
+test('the 2D board stays playable when WebGL is unavailable', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.addInitScript(() => {
+    const getContext = HTMLCanvasElement.prototype.getContext;
+    Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
+      value: function (this: HTMLCanvasElement, type: string, ...args: unknown[]) {
+        return type.startsWith('webgl') ? null : Reflect.apply(getContext, this, [type, ...args]);
+      },
+    });
+  });
+  await page.route('**/api/init', async (route) => {
+    const response = await route.fetch();
+    const init: InitResponse = await response.json();
+    await route.fulfill({ response, json: { ...init, startedAt: null, result: null } });
+  });
+
+  await page.goto('/src/client/game.html');
+  await expect(page.getByText('2D view. Use the fold buttons or arrow keys.', { exact: true })).toBeVisible();
+  await expect(page.locator('.hud__progress')).toHaveText(/\d of [1-9] in place/);
+  const canvas = page.locator('.stage__canvas[aria-hidden="true"]');
+  const initial = await canvas.evaluate((element: HTMLCanvasElement) => element.toDataURL());
+  await page.getByRole('button', { name: /^Hinge 1,/ }).click();
+  await page.getByRole('button', { name: 'Fold hinge 1 up' }).click();
+  await expect(page.getByRole('button', { name: 'Hinge 1, folded flat' })).toBeVisible();
+  await expect.poll(() => canvas.evaluate((element: HTMLCanvasElement) => element.toDataURL())).not.toBe(initial);
+  await page.keyboard.press('ArrowUp');
+  await expect(page.getByRole('button', { name: 'Hinge 1, folded up' })).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
 test('the result stays visible when a stalled leaderboard needs a retry', async ({ page }) => {
   await page.route('**/api/init', async (route) => {
     const response = await route.fetch();

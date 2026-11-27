@@ -3,6 +3,7 @@ import { calculateFrames } from '../../shared/engine';
 import { CREAM, INK, paperColor } from '../../shared/theme';
 import { drawGhost, drawMat, drawStrip, fitPoses } from '../lib/draw2d';
 import type { BoardScene } from '../scene/board';
+import { matchingSlots } from '../scene/slot-state';
 import type { Controller } from './controller';
 import { separateHinges } from './stage-hinges';
 
@@ -21,12 +22,15 @@ function positions(scene: BoardScene, canvas: HTMLCanvasElement | null) {
 export function Stage({ controller, sceneRef, onProgress }: StageProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fallbackRef = useRef<HTMLCanvasElement>(null);
-  const [ready, setReady] = useState(false);
+  const [renderer, setRenderer] = useState<{ info: NonNullable<Controller['info']>; ready: boolean } | null>(null);
   const [handPos, setHandPos] = useState<{ x: number; y: number } | null>(null);
   const [hingePositions, setHingePositions] = useState<Array<{ index: number; x: number; y: number }>>([]);
   const info = controller.info;
+  const angles = controller.angles;
+  const ready = renderer?.info === info && renderer?.ready === true;
+  const fallback = renderer?.info === info && renderer?.ready === false;
 
-  // The three.js scene is a lazy chunk; a static 2D strip covers the load.
+  // The playable 2D strip covers the lazy load or an unavailable WebGL context.
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !info) return;
@@ -45,9 +49,15 @@ export function Stage({ controller, sceneRef, onProgress }: StageProps) {
       });
       sceneRef.current = scene;
       onProgress(scene.inPlaceCount(), scene.movableCount);
-      setReady(true);
+      setRenderer({ info, ready: true });
       setHandPos(scene.panelScreenPosition(1));
       setHingePositions(positions(scene, canvasRef.current));
+    }).catch(() => {
+      if (disposed) return;
+      scene?.dispose();
+      scene = null;
+      sceneRef.current = null;
+      setRenderer({ info, ready: false });
     });
     return () => {
       disposed = true;
@@ -58,6 +68,10 @@ export function Stage({ controller, sceneRef, onProgress }: StageProps) {
 
   useEffect(() => {
     if (ready || !info) return;
+    const level = { turns: info.puzzle.turns };
+    const currentFrames = calculateFrames(level, angles).frames;
+    const goalFrames = calculateFrames(level, info.puzzle.goal).frames;
+    onProgress(matchingSlots(level.turns, angles, goalFrames).filter(Boolean).length, level.turns.length - 1);
     const canvas = fallbackRef.current;
     const stage = canvas?.parentElement;
     if (!canvas || !stage) return;
@@ -72,18 +86,15 @@ export function Stage({ controller, sceneRef, onProgress }: StageProps) {
       if (!ctx) return;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       drawMat(ctx, width, height);
-      const level = { turns: info.puzzle.turns };
-      const startFrames = calculateFrames(level, info.puzzle.start).frames;
-      const goalFrames = calculateFrames(level, info.puzzle.goal).frames;
-      const fit = fitPoses([startFrames, goalFrames], width, height, Math.min(width, height) * 0.16);
+      const fit = fitPoses([currentFrames, goalFrames], width, height, Math.min(width, height) * 0.16);
       drawGhost(ctx, goalFrames, fit, CREAM);
-      drawStrip(ctx, startFrames, fit, { paper: paperColor(info.tier), back: CREAM, ink: INK });
+      drawStrip(ctx, currentFrames, fit, { paper: paperColor(info.tier), back: CREAM, ink: INK });
     };
     draw();
     const observer = new ResizeObserver(draw);
     observer.observe(stage);
     return () => observer.disconnect();
-  }, [ready, info]);
+  }, [ready, info, angles, onProgress]);
 
   // Push committed states into the scene (covers buttons, keyboard and undo).
   const sentAngles = useRef(controller.angles);
@@ -132,6 +143,7 @@ export function Stage({ controller, sceneRef, onProgress }: StageProps) {
         role="img"
         aria-label={`Paper strip puzzle. ${controller.liveText}`}
       />
+      {fallback && <p className="stage__fallback-note" role="status">2D view. Use the fold buttons or arrow keys.</p>}
       {controller.phase === 'play' &&
         hingePositions.map(({ index, x, y }) => (
           <span
