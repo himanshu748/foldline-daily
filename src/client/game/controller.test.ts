@@ -108,12 +108,12 @@ const newerSolve = JSON.stringify({ rev: 2, moves: [[1, 90]], clientMs: 3000, fo
 
 it.each([null, completed.result])('keeps a newer local solve when a delayed init returns an older revision (%j)', async (result) => {
   const { controller, storage } = pendingSolve();
-  const reply = Promise.withResolvers<InitResponse>();
-  vi.spyOn(api, 'init').mockReturnValue(reply.promise);
+  let respond!: (response: InitResponse) => void;
+  vi.spyOn(api, 'init').mockReturnValue(new Promise((resolve) => { respond = resolve; }));
   const complete = vi.spyOn(api, 'complete');
   const waiting = controller.load();
   storage.set('foldline:pending:t3_retry', newerSolve);
-  reply.resolve(olderInit(result));
+  respond(olderInit(result));
   await waiting;
 
   expect(storage.get('foldline:pending:t3_retry')).toBe(newerSolve);
