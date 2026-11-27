@@ -25,3 +25,23 @@ test('a stalled solve request returns to local recovery without resubmitting', a
   await served;
   expect(fetch).toHaveBeenCalledTimes(1);
 });
+
+test('a stalled comment request stops waiting without reposting', async () => {
+  vi.useFakeTimers();
+  const fetch = vi.fn((_path: string, init: RequestInit) =>
+    new Promise<Response>((_resolve, reject) => {
+      init.signal?.addEventListener('abort', () => reject(init.signal?.reason), { once: true });
+    })
+  );
+  vi.stubGlobal('fetch', fetch);
+
+  const response = api.share();
+  expect(fetch).toHaveBeenCalledWith('/api/share', expect.objectContaining({
+    method: 'POST',
+    signal: expect.any(AbortSignal),
+  }));
+  const served = expect(response).rejects.toMatchObject({ code: 'offline' });
+  await vi.advanceTimersByTimeAsync(8_000);
+  await served;
+  expect(fetch).toHaveBeenCalledTimes(1);
+});

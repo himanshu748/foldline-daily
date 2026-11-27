@@ -10,7 +10,7 @@ import { SolveReplay } from './solve-replay';
 
 const RouteEditor = lazy(() => import('../editor/route-editor').then((mod) => ({ default: mod.RouteEditor })));
 
-type ShareState = 'idle' | 'posting' | 'posted' | 'already' | 'failed';
+type ShareState = 'idle' | 'posting' | 'posted' | 'already' | 'failed' | 'unconfirmed';
 
 function Countdown({ controller }: { controller: Controller }) {
   const init = controller.init;
@@ -85,7 +85,8 @@ export function EndCard({ controller }: { controller: Controller }) {
       setShare(response.status === 'already' ? 'already' : 'posted');
       showToast(response.asUser ? 'Your result was posted as a comment.' : 'Posted by the app account on your behalf.');
     } catch (error) {
-      setShare('failed');
+      const unclear = error instanceof ApiFailure && (error.code === 'offline' || error.code === 'server');
+      setShare(unclear ? 'unconfirmed' : 'failed');
       if (error instanceof ApiFailure && error.code === 'login') showLoginPrompt();
     }
   };
@@ -204,15 +205,17 @@ export function EndCard({ controller }: { controller: Controller }) {
             <button
               className="btn btn--primary"
               onClick={() => void onShare()}
-              disabled={share === 'posting' || share === 'posted' || share === 'already'}
+              disabled={share === 'posting' || share === 'posted' || share === 'already' || share === 'unconfirmed'}
             >
               {share === 'posting'
                 ? 'Posting the comment…'
                 : share === 'posted' || share === 'already'
                   ? 'Commented on this post'
-                  : share === 'failed'
-                    ? 'Comment failed. Try again'
-                    : 'Comment your result'}
+                  : share === 'unconfirmed'
+                    ? 'Comment unconfirmed. Check the post.'
+                    : share === 'failed'
+                      ? 'Comment failed. Try again'
+                      : 'Comment your result'}
             </button>
           )}
         </div>
