@@ -135,6 +135,8 @@ export class Controller {
       const server = parsePostWire(init.post);
       const { info, replaced } = puzzleForPlay(cached, server);
       if (!info) throw new Error('This post has no puzzle.');
+      const pending = readPending(context.postId);
+      if (pending && pending.rev > info.rev) this.stale = true;
       this.init = init;
       this.initState = 'ready';
       this.serverOffset = init.now - Date.now();
@@ -150,13 +152,13 @@ export class Controller {
           this.startedAt = init.startedAt;
           this.saveDraft();
         }
-        if (init.user.loggedIn && !init.result && !this.complete && !this.finishing) void this.submitPending();
+        if (!this.stale && init.user.loggedIn && !init.result && !this.complete && !this.finishing) void this.submitPending();
       } else if (init.result) {
         this.showServerResult(info, init.result.moves, init.result.folds);
-        this.clearPending();
+        if (pending && pending.rev <= info.rev) this.clearPending(pending.stored);
         this.clearDraft();
       } else {
-        this.reconcilePending(info, init.user.loggedIn, init.startedAt);
+        this.reconcilePending(info, pending, init.user.loggedIn, init.startedAt);
       }
     } catch (error) {
       this.initState = 'offline';
@@ -194,8 +196,7 @@ export class Controller {
   }
 
   /** Show a logged-out solve again, or send it once the player has an account. */
-  private reconcilePending(info: PostInfo, loggedIn: boolean, startedAt: number | null): void {
-    const pending = readPending(context.postId);
+  private reconcilePending(info: PostInfo, pending: PendingSubmission | null, loggedIn: boolean, startedAt: number | null): void {
     const action = pendingAction({
       pending,
       rev: info.rev,
@@ -203,13 +204,14 @@ export class Controller {
       hasServerResult: false,
       folded: false,
     });
-    if (action === 'drop') this.clearPending();
-    if ((action === 'restore' || action === 'submit') && pending && this.showLocal(info, pending)) {
-      this.clearDraft();
-      if (action === 'submit') void this.submitPending();
-      return;
+    if (pending && action !== 'keep') {
+      if (action !== 'drop' && this.showLocal(info, pending)) {
+        this.clearDraft();
+        if (action === 'submit') void this.submitPending();
+        return;
+      }
+      this.clearPending(pending.stored);
     }
-    if (action === 'restore' || action === 'submit') this.clearPending();
     if (!this.info || this.info.kind !== info.kind || this.info.rev !== info.rev || this.info.date !== info.date) this.applyFresh(info);
     this.phase = 'play';
     this.liveText = 'Puzzle ready. Drag a panel to fold it.';
@@ -285,12 +287,12 @@ export class Controller {
     return true;
   }
 
-  private clearPending(expected?: string): void {
+  private clearPending(expected: string): void {
     const postId = context.postId;
     if (!postId) return;
     try {
       const key = pendingKey(postId);
-      if (expected === undefined || localStorage.getItem(key) === expected) localStorage.removeItem(key);
+      if (localStorage.getItem(key) === expected) localStorage.removeItem(key);
     } catch {
       /* storage blocked */
     }
@@ -394,6 +396,11 @@ export class Controller {
     if (!postId || !this.loggedIn || this.submittingPending) return;
     const pending = readPending(postId);
     if (!pending) return;
+    if (this.info && pending.rev > this.info.rev) {
+      this.stale = true;
+      this.emit();
+      return;
+    }
     const moves = parseMoves(pending.moves);
     if (!moves) {
       this.clearPending(pending.stored);
@@ -448,7 +455,9 @@ export class Controller {
     if (postId) {
       try {
         // Save before submitting so closing or reloading cannot strand the solve.
-        localStorage.setItem(pendingKey(postId), pending);
+        const stored = readPending(postId);
+        if (stored && stored.rev > rev) this.stale = true;
+        else localStorage.setItem(pendingKey(postId), pending);
         this.clearDraft();
       } catch {
         /* The live submission can still succeed if storage is blocked. */

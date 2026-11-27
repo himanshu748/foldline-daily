@@ -93,6 +93,12 @@ describe('pendingAction', () => {
     ).toBe('drop');
   });
 
+  it('keeps a newer solve when the loaded puzzle is older, even with an old server score', () => {
+    expect(
+      pendingAction({ pending, rev: 0, loggedIn: true, hasServerResult: true, folded: false })
+    ).toBe('keep');
+  });
+
   it('leaves the solve alone once this visit has already folded', () => {
     expect(
       pendingAction({

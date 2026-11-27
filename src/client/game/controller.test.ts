@@ -1,5 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import type { CompleteResponse } from '../../shared/api';
+import type { CompleteResponse, InitResponse } from '../../shared/api';
+import { toPostWire } from '../../shared/postdata';
 import { api, ApiFailure } from '../lib/api';
 import { Controller } from './controller';
 
@@ -28,6 +29,7 @@ function pendingSolve() {
   ]);
   vi.stubGlobal('localStorage', {
     getItem: (key: string) => storage.get(key) ?? null,
+    setItem: (key: string, value: string) => { storage.set(key, value); },
     removeItem: (key: string) => storage.delete(key),
   });
   const controller = new Controller();
@@ -86,4 +88,64 @@ it.each(['success', 'stale'])('keeps a newer local solve when an older retry ret
   await retrying;
 
   expect(storage.get('foldline:pending:t3_retry')).toBe(newer);
+});
+
+function olderInit(result: InitResponse['result']): InitResponse {
+  return {
+    type: 'init',
+    post: toPostWire({
+      kind: 'daily', date: '2026-11-28', day: 1, rev: 1, tier: 1, source: 'generated',
+      puzzle: { turns: ['straight', 'straight', 'straight'], start: [0, 0, 0], goal: [0, 90, 0], par: 1 },
+    }),
+    postId: 't3_retry', subreddit: 'foldline', user: { loggedIn: true, name: 'pilot' },
+    today: '2026-11-28', now: 4000, isToday: true, skipped: false, nextPuzzleInMs: 1000, startedAt: null,
+    result, streak: completed.streak, field: null, flair: { enabled: false, optedIn: false },
+    routes: { enabled: false, submitted: false }, subscribed: false, shared: false,
+  };
+}
+
+const newerSolve = JSON.stringify({ rev: 2, moves: [[1, 90]], clientMs: 3000, folds: 1 });
+
+it.each([null, completed.result])('keeps a newer local solve when a delayed init returns an older revision (%j)', async (result) => {
+  const { controller, storage } = pendingSolve();
+  const reply = Promise.withResolvers<InitResponse>();
+  vi.spyOn(api, 'init').mockReturnValue(reply.promise);
+  const complete = vi.spyOn(api, 'complete');
+  const waiting = controller.load();
+  storage.set('foldline:pending:t3_retry', newerSolve);
+  reply.resolve(olderInit(result));
+  await waiting;
+
+  expect(storage.get('foldline:pending:t3_retry')).toBe(newerSolve);
+  expect(complete).not.toHaveBeenCalled();
+  expect(controller.stale).toBe(true);
+});
+
+it('does not overwrite a newer stored solve when an older open board finishes', async () => {
+  const { controller, storage } = pendingSolve();
+  storage.clear();
+  vi.spyOn(api, 'init').mockResolvedValue(olderInit(null));
+  vi.spyOn(api, 'start').mockResolvedValue({ type: 'start', startedAt: 2000 });
+  vi.spyOn(api, 'complete').mockRejectedValue(new ApiFailure(409, 'stale', 'This puzzle changed'));
+  await controller.load();
+  storage.set('foldline:pending:t3_retry', newerSolve);
+  controller.fold(1, 90);
+  await vi.waitFor(() => expect(controller.phase).toBe('solved'));
+
+  expect(storage.get('foldline:pending:t3_retry')).toBe(newerSolve);
+});
+
+it('does not retry a newer solve from an older open board', async () => {
+  const { controller, storage } = pendingSolve();
+  storage.clear();
+  vi.spyOn(api, 'init').mockResolvedValue(olderInit(null));
+  const complete = vi.spyOn(api, 'complete');
+  await controller.load();
+  storage.set('foldline:pending:t3_retry', newerSolve);
+
+  await controller.submitPending();
+
+  expect(complete).not.toHaveBeenCalled();
+  expect(storage.get('foldline:pending:t3_retry')).toBe(newerSolve);
+  expect(controller.stale).toBe(true);
 });

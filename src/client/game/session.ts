@@ -61,7 +61,7 @@ export type PendingAction = 'submit' | 'restore' | 'drop' | 'keep';
 
 /**
  * What to do with a solve that was stored on the device.
- * A mismatched revision is dropped so an old solve is never shown on a new puzzle.
+ * Newer saves may belong to a refreshed tab. Only remove obsolete or already scored solves.
  */
 export function pendingAction(input: {
   pending: { rev: number } | null;
@@ -71,8 +71,8 @@ export function pendingAction(input: {
   folded: boolean;
 }): PendingAction {
   const { pending, rev, loggedIn, hasServerResult, folded } = input;
-  if (!pending) return 'keep';
-  if (hasServerResult || pending.rev !== rev) return 'drop';
+  if (!pending || pending.rev > rev) return 'keep';
+  if (hasServerResult || pending.rev < rev) return 'drop';
   if (folded) return 'keep';
   return loggedIn ? 'submit' : 'restore';
 }
