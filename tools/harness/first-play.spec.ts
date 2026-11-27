@@ -2,6 +2,11 @@ import { expect, test, type Page } from '@playwright/test';
 import type { InitResponse } from '../../src/shared/api';
 
 async function solveFixture(page: Page) {
+  const secondHinge = page.getByRole('button', { name: /^Hinge 2,/ });
+  await expect(async () => {
+    await page.keyboard.press('2');
+    await expect(secondHinge).toHaveAttribute('aria-pressed', 'true', { timeout: 500 });
+  }).toPass({ timeout: 5_000 });
   // The shortest solution for the harness board dated 2026-11-19.
   for (const key of ['1', 'ArrowUp', 'ArrowUp', '2', 'ArrowDown', '3', 'ArrowUp', '4', 'ArrowDown']) {
     await page.keyboard.press(key);
@@ -195,9 +200,18 @@ test('a solved puzzle is retried after reloading during score submission', async
 
 test('a saved local solve remains visible when initialization fails after a reload', async ({ page }) => {
   let connected = true;
-  await page.route('**/api/init', (route) => (connected ? route.continue() : route.abort()));
+  let canSave = false;
+  await page.route('**/api/init', async (route) => {
+    if (!connected) return route.abort();
+    const response = await route.fetch();
+    const init: InitResponse = await response.json();
+    await route.fulfill({ response, json: { ...init, result: null, user: canSave ? init.user : { loggedIn: false, name: null } } });
+  });
   let saves = 0;
-  await page.route('**/api/attempt/complete', (route) => (++saves === 1 ? route.abort() : route.continue()));
+  await page.route('**/api/attempt/complete', (route) => {
+    saves++;
+    return canSave ? route.continue() : route.abort();
+  });
 
   await page.goto('/src/client/game.html');
   const first = page.waitForRequest('**/api/attempt/complete');
@@ -214,6 +228,7 @@ test('a saved local solve remains visible when initialization fails after a relo
   expect(saves).toBe(1);
 
   connected = true;
+  canSave = true;
   const retried = page.waitForRequest('**/api/attempt/complete');
   await result.getByRole('button', { name: 'Reconnect' }).click();
   expect((await retried).postDataJSON()).toEqual(original);
