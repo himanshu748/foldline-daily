@@ -143,7 +143,7 @@ export class Controller {
           this.startedAt = init.startedAt;
           this.saveDraft();
         }
-        if (init.user.loggedIn && !init.result && !this.complete) void this.submitPending();
+        if (init.user.loggedIn && !init.result && !this.complete && !this.finishing) void this.submitPending();
       } else if (init.result) {
         this.showServerResult(info, init.result.moves, init.result.folds);
         this.clearPending();
@@ -274,11 +274,12 @@ export class Controller {
     return true;
   }
 
-  private clearPending(): void {
+  private clearPending(expected?: string): void {
     const postId = context.postId;
     if (!postId) return;
     try {
-      localStorage.removeItem(pendingKey(postId));
+      const key = pendingKey(postId);
+      if (expected === undefined || localStorage.getItem(key) === expected) localStorage.removeItem(key);
     } catch {
       /* storage blocked */
     }
@@ -427,14 +428,27 @@ export class Controller {
       par: puzzle.par,
       grid: shareGrid(puzzle, this.moves),
     };
+    const rev = this.info.rev;
+    const postId = context.postId;
+    const pending = JSON.stringify({ rev, moves, clientMs, folds: local.folds });
+    if (postId) {
+      try {
+        // Save before submitting so closing or reloading cannot strand the solve.
+        localStorage.setItem(pendingKey(postId), pending);
+        this.clearDraft();
+      } catch {
+        /* The live submission can still succeed if storage is blocked. */
+      }
+    }
     this.liveText = `Solved in ${local.folds} folds.`;
     try {
       const complete = await api.complete({
-        rev: this.info.rev,
+        rev,
         moves,
         clientMs,
       });
       this.complete = complete;
+      this.clearPending(pending);
       this.clearDraft();
       this.localResult = null;
       this.submitError = null;
@@ -443,10 +457,12 @@ export class Controller {
       if (error instanceof ApiFailure && error.code === 'stale') {
         // A moderator regenerated the puzzle mid-attempt; this solve cannot be scored.
         this.stale = true;
+        this.clearPending(pending);
         this.clearDraft();
         this.submitError = null;
         this.localResult = null;
       } else if (error instanceof ApiFailure && (error.code === 'invalid-moves' || error.code === 'unsolved')) {
+        this.clearPending(pending);
         this.clearDraft();
         this.submitError = 'The server could not verify that solve. It was not saved.';
         this.localResult = null;
@@ -454,23 +470,6 @@ export class Controller {
         // Logged out or offline: keep the verified moves locally and offer a retry.
         this.localResult = local;
         this.submitError = error instanceof ApiFailure && error.code === 'login' ? null : 'Your result could not be saved yet.';
-        const postId = context.postId;
-        if (postId) {
-          try {
-            localStorage.setItem(
-              pendingKey(postId),
-              JSON.stringify({
-                rev: this.info.rev,
-                moves,
-                clientMs,
-                folds: local.folds,
-              })
-            );
-            this.clearDraft();
-          } catch {
-            /* storage blocked; the result is lost on reload, nothing more */
-          }
-        }
       }
     }
     this.finishing = false;
