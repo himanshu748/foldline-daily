@@ -195,8 +195,8 @@ export function EndCard({ controller }: { controller: Controller }) {
           {!canReconnect && controller.submitError && (init?.user.loggedIn || controller.initState === 'offline') && (
             <p className="card__error">
               {controller.submitError}{' '}
-              <button className="card__link" onClick={() => void controller.submitPending()}>
-                Try again
+              <button className="card__link" disabled={controller.submittingPending} onClick={() => void controller.submitPending()}>
+                {controller.submittingPending ? 'Saving your result…' : 'Try again'}
               </button>
             </p>
           )}
