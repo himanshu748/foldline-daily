@@ -1,10 +1,12 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { canRunAsUser, navigateTo, showLoginPrompt, showToast } from '@devvit/web/client';
 import { bucketFor, DIST_BUCKETS, formatTime, resultNote } from '../../shared/score';
+import { paperColor } from '../../shared/theme';
 import { ApiFailure, api } from '../lib/api';
 import type { Controller } from './controller';
 import { Leaderboard } from './leaderboard';
 import { ModalSheet } from './modal-sheet';
+import { SolveReplay } from './solve-replay';
 
 const RouteEditor = lazy(() => import('../editor/route-editor').then((mod) => ({ default: mod.RouteEditor })));
 
@@ -53,6 +55,7 @@ export function EndCard({ controller }: { controller: Controller }) {
   const [flairChoice, setFlairOptIn] = useState<boolean | null>(null);
   const [flairNote, setFlairNote] = useState<string | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
+  const [replayOpen, setReplayOpen] = useState(false);
   const [routeChoice, setRouteDone] = useState<boolean | null>(null);
   const share = shareChoice ?? (init?.shared ? 'already' : 'idle');
   const joined = joinedChoice ?? init?.subscribed ?? false;
@@ -156,6 +159,17 @@ export function EndCard({ controller }: { controller: Controller }) {
             {practiceFolds === null && resultNote(field.standing, field.total) ? <> {resultNote(field.standing, field.total)}</> : null}
           </p>
         </header>
+
+        {controller.info && controller.moves.length > 0 && (
+          <div className="card__actions">
+            <button className="btn" aria-expanded={replayOpen} aria-controls="solve-replay" onClick={() => setReplayOpen(!replayOpen)}>
+              {replayOpen ? 'Hide fold replay' : practiceFolds !== null ? 'Replay practice folds' : 'Replay your folds'}
+            </button>
+            {replayOpen && (
+              <SolveReplay puzzle={controller.info.puzzle} moves={controller.moves} paper={paperColor(controller.info.tier)} />
+            )}
+          </div>
+        )}
 
         {result.grid && (
           <div className="card__share">

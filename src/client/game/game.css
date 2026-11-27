@@ -436,6 +436,25 @@ body,
   margin: 0;
 }
 
+.solve-replay {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+}
+
+.solve-replay__canvas {
+  display: block;
+  width: 100%;
+  height: 128px;
+  border-radius: 12px;
+}
+
+.solve-replay__controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .card__grid {
   margin: 8px 0 0;
   padding: 12px;
