@@ -20,13 +20,15 @@ export interface LocalResult {
 
 const pendingKey = (postId: string): string => `foldline:pending:${postId}`;
 
-type PendingSubmission = PendingSolve;
+type PendingSubmission = PendingSolve & { stored: string };
 
 function readPending(postId: string | undefined): PendingSubmission | null {
   if (!postId) return null;
   try {
-    const raw = JSON.parse(localStorage.getItem(pendingKey(postId)) ?? 'null') as unknown;
-    return isPendingSolve(raw) ? raw : null;
+    const stored = localStorage.getItem(pendingKey(postId));
+    if (stored === null) return null;
+    const raw = JSON.parse(stored) as unknown;
+    return isPendingSolve(raw) ? { ...raw, stored } : null;
   } catch {
     return null;
   }
@@ -258,7 +260,7 @@ export class Controller {
     }
   }
 
-  private showLocal(info: PostInfo, pending: PendingSubmission): boolean {
+  private showLocal(info: PostInfo, pending: PendingSolve): boolean {
     const moves = parseMoves(pending.moves);
     if (!moves) return false;
     let played: ReturnType<typeof replay>;
@@ -394,7 +396,7 @@ export class Controller {
     if (!pending) return;
     const moves = parseMoves(pending.moves);
     if (!moves) {
-      this.clearPending();
+      this.clearPending(pending.stored);
       return;
     }
     this.submittingPending = true;
@@ -405,7 +407,7 @@ export class Controller {
         moves: movesToWire(moves),
         clientMs: pending.clientMs,
       });
-      this.clearPending();
+      this.clearPending(pending.stored);
       this.clearDraft();
       this.complete = complete;
       this.localResult = null;
@@ -414,7 +416,7 @@ export class Controller {
     } catch (error) {
       const code = error instanceof ApiFailure ? error.code : null;
       if (!keepsPendingSolve(code)) {
-        this.clearPending();
+        this.clearPending(pending.stored);
         this.localResult = null;
         this.submitError = code === 'stale' ? null : 'The server could not verify that solve. It was not saved.';
         if (code === 'stale') this.stale = true;
