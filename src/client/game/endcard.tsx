@@ -75,6 +75,7 @@ export function EndCard({ controller }: { controller: Controller }) {
       standing: null,
     };
   const storedServerSide = Boolean(complete ?? init?.result);
+  const canReconnect = controller.canReconnectToSubmit;
   const practiceFolds = controller.practiceFolds;
   const shownFolds = practiceFolds ?? result.folds;
   const overPar = shownFolds - result.par;
@@ -180,7 +181,15 @@ export function EndCard({ controller }: { controller: Controller }) {
 
         <div className="card__actions">
           {controller.initState === 'loading' && <p className="card__note">Saving your Foldline result…</p>}
-          {controller.initState !== 'loading' && !init?.user.loggedIn && (
+          {canReconnect && (
+            <div className="card__login">
+              <p>Your result is saved here. Reconnect to submit it.</p>
+              <button className="btn btn--primary" onClick={() => window.location.reload()}>
+                Reconnect
+              </button>
+            </div>
+          )}
+          {!canReconnect && controller.initState !== 'loading' && !init?.user.loggedIn && (
             <div className="card__login">
               <p>Log in to comment this result, keep your streak, and join the leaderboard.</p>
               <button className="btn btn--primary" onClick={() => showLoginPrompt()}>
@@ -188,7 +197,7 @@ export function EndCard({ controller }: { controller: Controller }) {
               </button>
             </div>
           )}
-          {controller.submitError && (init?.user.loggedIn || controller.initState === 'offline') && (
+          {!canReconnect && controller.submitError && (init?.user.loggedIn || controller.initState === 'offline') && (
             <p className="card__error">
               {controller.submitError}{' '}
               <button className="card__link" onClick={() => void controller.submitPending()}>
