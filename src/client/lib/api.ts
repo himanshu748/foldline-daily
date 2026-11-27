@@ -51,18 +51,20 @@ async function call<T>(path: string, body?: unknown, signal?: AbortSignal): Prom
   return data as T;
 }
 
+async function callWithTimeout<T>(path: string, timeoutMs: number, body?: unknown): Promise<T> {
+  const request = new AbortController();
+  const timeout = setTimeout(() => request.abort(), timeoutMs);
+  try {
+    return await call<T>(path, body, request.signal);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 export const api = {
-  init: async () => {
-    const request = new AbortController();
-    const timeout = setTimeout(() => request.abort(), 4_000);
-    try {
-      return await call<InitResponse>('/api/init', undefined, request.signal);
-    } finally {
-      clearTimeout(timeout);
-    }
-  },
+  init: () => callWithTimeout<InitResponse>('/api/init', 4_000),
   start: () => call<StartResponse>('/api/attempt/start', {}),
-  complete: (request: CompleteRequest) => call<CompleteResponse>('/api/attempt/complete', request),
+  complete: (request: CompleteRequest) => callWithTimeout<CompleteResponse>('/api/attempt/complete', 8_000, request),
   leaderboard: () => call<LeaderboardResponse>('/api/leaderboard'),
   share: () => call<ShareResponse>('/api/share', {}),
   subscribe: () => call<SubscribeResponse>('/api/subscribe', {}),
