@@ -16,10 +16,15 @@ export const postUrl = (subreddit: string, postId: string): string =>
 /**
  * A post's puzzle. Redis holds the authoritative copy when present. Use the
  * attached Reddit post data if it was supplied by the client context or the
- * cached record is missing.
+ * cached record is missing. After a failed cache read, use only live Reddit
+ * data so an older client context cannot bring back a replaced puzzle.
  */
 export async function loadPostInfo(postId: string, fallback?: unknown): Promise<PostInfo | null> {
-  const raw = await redis.get(K.post(postId));
+  let cacheFailure: { error: unknown } | undefined;
+  const raw = await redis.get(K.post(postId)).catch((error: unknown) => {
+    cacheFailure = { error };
+    return undefined;
+  });
   if (raw) {
     try {
       const info = parsePostWire(JSON.parse(raw));
@@ -28,15 +33,21 @@ export async function loadPostInfo(postId: string, fallback?: unknown): Promise<
       // Fall through to postData.
     }
   }
-  const supplied = parsePostWire(fallback);
-  if (supplied || !isPostId(postId)) return supplied;
-  try {
-    const post = await reddit.getPostById(postId);
-    return parsePostWire(await post.getPostData());
-  } catch (error) {
-    console.warn('Could not read puzzle data from the Reddit post:', error);
-    return null;
+  if (!cacheFailure) {
+    const supplied = parsePostWire(fallback);
+    if (supplied) return supplied;
   }
+  if (isPostId(postId)) {
+    try {
+      const post = await reddit.getPostById(postId);
+      const info = parsePostWire(await post.getPostData());
+      if (info) return info;
+    } catch (error) {
+      console.warn('Could not read puzzle data from the Reddit post:', error);
+    }
+  }
+  if (cacheFailure) throw cacheFailure.error;
+  return null;
 }
 
 export async function savePostInfo(postId: string, info: PostInfo): Promise<void> {

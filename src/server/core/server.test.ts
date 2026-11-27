@@ -8,7 +8,7 @@ import type { FoldMove } from '../../shared/engine';
 import { generate } from '../../shared/generator';
 import { puzzleHook } from '../../shared/hooks';
 import { movesToWire } from '../../shared/moves';
-import { parsePostWire, type PostInfo } from '../../shared/postdata';
+import { parsePostWire, toPostWire, type PostInfo } from '../../shared/postdata';
 import { encodeAngles, encodeTurns, puzzleSignature } from '../../shared/puzzle';
 import { validatePuzzle } from '../../shared/validate';
 import { app } from '../app';
@@ -121,6 +121,29 @@ describe('daily post job', () => {
     } finally {
       warn.mockRestore();
       submit.mockRestore();
+      cache.mockRestore();
+    }
+  });
+
+  test('recovers the current Reddit puzzle when the cache read fails', async () => {
+    const before = await todaysPost();
+    const regenerated = await regenerateToday(NOW + 1000);
+    expect(regenerated).toMatchObject({ status: 'done', postId: before.postId, reposted: false });
+    if (regenerated.status !== 'done') throw new Error('Expected regeneration to succeed');
+    const cache = vi.spyOn(redis, 'get').mockRejectedValue(new Error('cache unavailable'));
+    try {
+      const stale = toPostWire(before.info);
+      expect((await loadPostInfo(before.postId, stale))?.rev).toBe(regenerated.rev);
+
+      const redditRead = vi.spyOn(reddit, 'getPostById').mockRejectedValueOnce(new Error('Reddit unavailable'));
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        await expect(loadPostInfo(before.postId, stale)).rejects.toThrow('cache unavailable');
+      } finally {
+        warn.mockRestore();
+        redditRead.mockRestore();
+      }
+    } finally {
       cache.mockRestore();
     }
   });
