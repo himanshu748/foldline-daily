@@ -89,7 +89,9 @@ api.get('/init', async (c) => {
 
   // A player who solved yesterday and opens today's puzzle has come back.
   if (player && isToday && user.streak.last === addDays(s.today, -1))
-    await countOnce(s.today, player.id, 'return_next_day');
+    await countOnce(s.today, player.id, 'return_next_day').catch((error: unknown) =>
+      console.warn('Return analytics could not be recorded:', error)
+    );
 
   const startedAt = Number(startRaw);
   return c.json<InitResponse>({
