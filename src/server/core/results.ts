@@ -18,7 +18,7 @@ import {
   TIME_CAP_MS,
 } from '../../shared/score';
 import { shareGrid } from '../../shared/share';
-import { flairTier } from '../../shared/streak';
+import { flairTier, type StreakState } from '../../shared/streak';
 import { loadSkips, type AppConfig } from './config';
 import { ApiError } from './errors';
 import { applyFlair } from './flair';
@@ -137,11 +137,6 @@ export async function completeAttempt(input: CompleteInput, body: unknown): Prom
   const won =
     !practiceOnly && (await redis.hSetNX(K.result(board), player.id, packResult(attempt))) === 1;
 
-  let streakExtended = false;
-  let newTier: string | null = null;
-  let flairStatus: FlairStatus = 'unchanged';
-  let streak = (await loadUser(player.id)).streak;
-
   if (won) {
     await Promise.all([
       redis.zAdd(K.lb(board), { member: player.name, score: encodeScore(folds, ms) }),
@@ -150,15 +145,27 @@ export async function completeAttempt(input: CompleteInput, body: unknown): Prom
         console.warn('Solve analytics could not be recorded:', error)
       ),
     ]);
-    // Only the current day's puzzle counts toward the streak.
-    if (info.kind === 'daily' && info.date === today) {
+  }
+
+  let streakExtended = false;
+  let newTier: string | null = null;
+  let flairStatus: FlairStatus = 'unchanged';
+  let streak: StreakState | null = null;
+  try {
+    // Streaks are secondary to the saved result and its leaderboard entry.
+    if (won && info.kind === 'daily' && info.date === today) {
       const { before, after } = await extendStreak(player, info.date, skips);
       streak = after;
       streakExtended = after.last === info.date && before.last !== info.date;
       const tier = flairTier(after.best);
       if (tier && tier.id !== flairTier(before.best)?.id) newTier = tier.name;
-      flairStatus = await applyFlair(player, after.best, config);
-    }
+      flairStatus = await applyFlair(player, after.best, config).catch((error: unknown) => {
+        console.warn('Streak flair could not be loaded:', error);
+        return 'unavailable' as const;
+      });
+    } else streak = (await loadUser(player.id)).streak;
+  } catch (error) {
+    console.warn('Streak could not be confirmed:', error);
   }
 
   const stored = won ? attempt : ((await loadResult(board, player.id)) ?? attempt);
@@ -167,7 +174,7 @@ export async function completeAttempt(input: CompleteInput, body: unknown): Prom
     scored: won,
     result: resultView(info, stored),
     attempt: { folds, ms },
-    streak: streakView(streak, today, skips),
+    streak: streak ? streakView(streak, today, skips) : null,
     field: await fieldView(board, practiceOnly ? null : player.name),
     streakExtended,
     newTier,

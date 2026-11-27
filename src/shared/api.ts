@@ -81,7 +81,8 @@ export interface CompleteResponse {
   result: ResultView;
   /** This attempt's own numbers, for practice feedback. */
   attempt: { folds: number; ms: number };
-  streak: StreakView;
+  /** Null when the streak could not be confirmed. */
+  streak: StreakView | null;
   /** Null when the leaderboard comparison could not be loaded. */
   field: FieldView | null;
   streakExtended: boolean;

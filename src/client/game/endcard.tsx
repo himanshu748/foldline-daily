@@ -66,7 +66,7 @@ export function EndCard({ controller }: { controller: Controller }) {
   if (!result) return null;
 
   const complete = controller.complete;
-  const streak = complete?.streak ?? init?.streak ?? { current: 0, best: 0, tier: null, nextTier: null };
+  const streak = complete ? complete.streak : (init?.streak ?? null);
   const field = complete ? complete.field : (init?.field ?? null);
   const storedServerSide = Boolean(complete ?? init?.result);
   const canReconnect = controller.canReconnectToSubmit;
@@ -243,15 +243,17 @@ export function EndCard({ controller }: { controller: Controller }) {
           <p className="card__muted">Leaderboard comparison is unavailable.</p>
         )}
 
-        <p className="card__streak">
-          Streak <b className="num">{streak.current}</b>, best <b className="num">{streak.best}</b>
-          {streak.nextTier && (
-            <span className="card__muted">
-              {' '}
-              , {streak.nextTier.days - streak.best} {streak.nextTier.days - streak.best === 1 ? 'day' : 'days'} to {streak.nextTier.name}
-            </span>
-          )}
-        </p>
+        {streak ? (
+          <p className="card__streak">
+            Streak <b className="num">{streak.current}</b>, best <b className="num">{streak.best}</b>
+            {streak.nextTier && (
+              <span className="card__muted">
+                {' '}
+                , {streak.nextTier.days - streak.best} {streak.nextTier.days - streak.best === 1 ? 'day' : 'days'} to {streak.nextTier.name}
+              </span>
+            )}
+          </p>
+        ) : complete && <p className="card__muted">Streak could not be confirmed.</p>}
         {complete?.streakExtended && <p className="card__tier">Streak extended!</p>}
         {complete?.newTier && <p className="card__tier">New flair tier earned: {complete.newTier}</p>}
 
@@ -273,7 +275,7 @@ export function EndCard({ controller }: { controller: Controller }) {
                   <span className="toggle__track" aria-hidden="true">
                     <span className="toggle__thumb" />
                   </span>
-                  Wear streak flair{streak.tier ? ` (${streak.tier})` : ''}
+                  Wear streak flair{streak?.tier ? ` (${streak.tier})` : ''}
                 </button>
               )}
               {flairNote && <p className="card__muted">{flairNote}</p>}

@@ -11,7 +11,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-const completed: CompleteResponse = {
+const completed = {
   type: 'complete',
   scored: true,
   result: { folds: 1, par: 1, ms: 2000, moves: '1+', grid: '' },
@@ -21,7 +21,7 @@ const completed: CompleteResponse = {
   streakExtended: true,
   newTier: null,
   flairStatus: 'unchanged',
-};
+} satisfies CompleteResponse;
 
 function pendingSolve() {
   const storage = new Map([
