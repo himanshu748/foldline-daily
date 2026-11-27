@@ -210,11 +210,21 @@ export async function regenerateToday(now = Date.now()): Promise<RegenerateOutco
 }
 
 /** Players who have a scored result on today's puzzle (shown before a regenerate). */
-export async function finishersToday(now = Date.now()): Promise<{ date: string; count: number; posted: boolean }> {
+export async function finishersToday(now = Date.now()): Promise<{ date: string; count: number | null; posted: boolean }> {
   const config = await loadConfig();
   const date = todayKey(config, now);
   const record = (await redis.hGetAll(K.day(date))) ?? {};
-  if (!record.postId) return { date, count: 0, posted: false };
-  const count = await redis.zCard(K.lb(dayBoard(date, Number(record.rev ?? 0))));
+  let rev = Number(record.rev ?? 0);
+  if (!isPostId(record.postId)) {
+    const indexed = await redis.hGet(K.posts, date);
+    if (!isPostId(indexed)) return { date, count: 0, posted: false };
+    const info = await loadPostInfo(indexed).catch((error: unknown) => {
+      console.warn('Could not read the indexed puzzle revision:', error);
+      return null;
+    });
+    if (!info || info.kind !== 'daily' || info.date !== date) return { date, count: null, posted: true };
+    rev = info.rev;
+  }
+  const count = await redis.zCard(K.lb(dayBoard(date, rev)));
   return { date, count, posted: true };
 }

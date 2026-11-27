@@ -17,7 +17,7 @@ import { DEFAULT_CONFIG, setSkipped } from './config';
 import { ApiError } from './errors';
 import { setFlairOptIn } from './flair';
 import { boardFor, dayBoard, K } from './keys';
-import { ensureDailyPost, regenerateToday, replacementFor } from './posts';
+import { ensureDailyPost, finishersToday, regenerateToday, replacementFor } from './posts';
 import { ensureThread, loadPostInfo } from './postinfo';
 import { completeAttempt, fieldView, leaderboard, loadResult, startAttempt } from './results';
 import { shareResult } from './share';
@@ -144,6 +144,33 @@ describe('daily post job', () => {
       warn.mockRestore();
       submit.mockRestore();
       index.mockRestore();
+    }
+  });
+
+  test('finds the indexed puzzle and its revision when daily metadata was not saved', async () => {
+    const write = redis.hSet.bind(redis);
+    const day = vi.spyOn(redis, 'hSet').mockImplementation((key, fields) =>
+      key === K.day(TODAY) && fields.postId ? Promise.reject(new Error('daily metadata unavailable')) : write(key, fields)
+    );
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      await redis.hSet(K.day(TODAY), { rev: '2' });
+      const outcome = await ensureDailyPost(NOW);
+      if (outcome.status !== 'created') throw new Error('Expected a confirmed daily post');
+      expect(await redis.hGet(K.posts, TODAY)).toBe(outcome.postId);
+      expect(await redis.hGet(K.day(TODAY), 'postId')).toBeUndefined();
+      await redis.zAdd(K.lb(dayBoard(TODAY, 2)), { member: alice.id, score: 1 });
+      expect(await finishersToday(NOW)).toEqual({ date: TODAY, count: 1, posted: true });
+      await redis.del(K.post(outcome.postId));
+      const read = vi.spyOn(reddit, 'getPostById').mockRejectedValue(new Error('puzzle unavailable'));
+      try {
+        expect(await finishersToday(NOW)).toEqual({ date: TODAY, count: null, posted: true });
+      } finally {
+        read.mockRestore();
+      }
+    } finally {
+      warn.mockRestore();
+      day.mockRestore();
     }
   });
 
