@@ -283,6 +283,33 @@ describe('scored attempts', () => {
     });
   });
 
+  for (const operation of ['read', 'write'] as const) {
+    test(`a failed streak ${operation} still confirms and ranks the first solve`, async () => {
+      const { info, board } = await todaysPost();
+      const read = redis.hGetAll.bind(redis);
+      const write = redis.hSet.bind(redis);
+      const spy = operation === 'read'
+        ? vi.spyOn(redis, 'hGetAll').mockImplementation((key) =>
+            key === K.user(alice.id) ? Promise.reject(new Error('streak unavailable')) : read(key)
+          )
+        : vi.spyOn(redis, 'hSet').mockImplementation((key, value) =>
+            key === K.user(alice.id) ? Promise.reject(new Error('streak unavailable')) : write(key, value)
+          );
+      try {
+        const response = await complete(info, board, alice, solution(info));
+        expect(response).toMatchObject({
+          scored: true, streak: null, streakExtended: false, field: { total: 1, rank: 0 },
+        });
+        expect(await loadResult(board, alice.id)).toMatchObject({ folds: info.puzzle.par });
+      } finally {
+        spy.mockRestore();
+      }
+      const retry = await complete(info, board, alice, solution(info));
+      expect(retry).toMatchObject({ scored: false, reason: 'practice', field: { total: 1, rank: 0 } });
+      expect(await redis.hGetAll(K.dist(board))).toEqual({ '0': '1' });
+    });
+  }
+
   test('ranks by fewest folds, then by time, and counts the distribution', async () => {
     const { info, board } = await todaysPost();
     const players = Array.from({ length: 30 }, (_, i) => ({ id: `t2_p${i}`, name: `player${i}` }));
