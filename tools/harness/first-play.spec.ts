@@ -108,3 +108,47 @@ test('a signed-out solve survives reload and offers the Reddit login prompt', as
   await login.click();
   await prompt;
 });
+
+test('an unfinished attempt keeps its timer, folds and undo history across reload', async ({ page }) => {
+  const startedAt = Date.now() - 30_000;
+  let starts = 0;
+  let submissions = 0;
+  page.on('request', (request) => {
+    if (new URL(request.url()).pathname === '/api/attempt/complete') submissions++;
+  });
+  await page.route('**/api/attempt/start', (route) => {
+    starts++;
+    return route.fulfill({ json: { type: 'start', startedAt } });
+  });
+  await page.route('**/api/init', async (route) => {
+    const response = await route.fetch();
+    const init: InitResponse = await response.json();
+    await route.fulfill({ response, json: { ...init, result: null, startedAt: starts ? startedAt : null } });
+  });
+
+  await page.goto('/src/client/game.html');
+  await page.keyboard.press('1');
+  const started = page.waitForResponse('**/api/attempt/start');
+  await page.keyboard.press('ArrowUp');
+  await started;
+  await page.keyboard.press('ArrowUp');
+  await expect(page.getByLabel('2 folds', { exact: true })).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByLabel('2 folds', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Hinge 1, folded up' })).toBeVisible();
+  await page.getByRole('button', { name: 'Undo last fold (costs one fold)' }).click();
+  await expect(page.getByRole('button', { name: 'Hinge 1, folded flat' })).toBeVisible();
+  await expect(page.getByLabel('3 folds', { exact: true })).toBeVisible();
+  const completed = page.waitForRequest('**/api/attempt/complete');
+  const accepted = page.waitForResponse('**/api/attempt/complete');
+  for (const key of ['1', 'ArrowUp', '2', 'ArrowDown', '3', 'ArrowUp', '4', 'ArrowDown']) {
+    await page.keyboard.press(key);
+  }
+  const submission = (await completed).postDataJSON();
+  expect(submission.moves).toEqual([[1, 0], [1, 90], [1, 0], [1, 90], [2, -90], [3, 0], [4, -90]]);
+  expect(submission.clientMs).toBeGreaterThanOrEqual(30_000);
+  expect((await accepted).status()).toBe(200);
+  expect(starts).toBe(1);
+  expect(submissions).toBe(1);
+});
