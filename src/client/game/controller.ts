@@ -7,7 +7,7 @@ import { shareGrid } from '../../shared/share';
 import type { CompleteResponse, InitResponse } from '../../shared/api';
 import { api, ApiFailure } from '../lib/api';
 import { track } from '../lib/track';
-import { isPendingSolve, keepsPendingSolve, pendingAction, puzzleForPlay, type PendingSolve } from './session';
+import { isPendingSolve, keepsPendingSolve, pendingAction, puzzleForPlay, restoreAttempt, type PendingSolve } from './session';
 
 export type Phase = 'loading' | 'error' | 'play' | 'solved';
 
@@ -61,6 +61,9 @@ export class Controller {
   private serverOffset = 0;
   private history: FoldAngle[][] = [];
   private finishing = false;
+  /** An untouched restored draft yields to a newer board or a result from another tab. */
+  private restoredDraft = false;
+  private readonly draftKey = context.postId ? `foldline:attempt:${context.postId}:${context.userId ?? 'guest'}` : null;
   private readonly listeners = new Set<() => void>();
 
   constructor() {
@@ -68,6 +71,7 @@ export class Controller {
     if (!cached) return;
     this.applyFresh(cached);
     this.liveText = 'Puzzle ready. Drag a panel to fold it.';
+    if (!readPending(context.postId)) this.restoreDraft(cached, false);
   }
 
   subscribe = (listener: () => void): (() => void) => {
@@ -127,14 +131,23 @@ export class Controller {
       this.init = init;
       this.initState = 'ready';
       this.serverOffset = init.now - Date.now();
+      if (this.restoredDraft && (replaced || init.result)) {
+        this.clearDraft();
+        this.applyFresh(info);
+      }
       const folded = this.moves.length > 0 || this.finishing || this.solved;
       if (folded) {
         if (replaced) this.stale = true;
         this.info = this.info ?? info;
+        if (!this.stale && !this.solved && !this.finishing && !this.practice && init.startedAt !== null) {
+          this.startedAt = init.startedAt;
+          this.saveDraft();
+        }
         if (init.user.loggedIn && !init.result && !this.complete) void this.submitPending();
       } else if (init.result) {
         this.showServerResult(info, init.result.moves, init.result.folds);
         this.clearPending();
+        this.clearDraft();
       } else {
         this.reconcilePending(info, init.user.loggedIn, init.startedAt);
       }
@@ -155,6 +168,7 @@ export class Controller {
     this.history = [[...this.angles]];
     this.practice = false;
     this.practiceFolds = null;
+    this.restoredDraft = false;
     this.phase = 'play';
   }
 
@@ -180,14 +194,59 @@ export class Controller {
     });
     if (action === 'drop') this.clearPending();
     if ((action === 'restore' || action === 'submit') && pending && this.showLocal(info, pending)) {
+      this.clearDraft();
       if (action === 'submit') void this.submitPending();
       return;
     }
     if (action === 'restore' || action === 'submit') this.clearPending();
     if (!this.info || this.info.kind !== info.kind || this.info.rev !== info.rev || this.info.date !== info.date) this.applyFresh(info);
-    this.startedAt = startedAt;
     this.phase = 'play';
     this.liveText = 'Puzzle ready. Drag a panel to fold it.';
+    this.restoreDraft(info, true);
+    this.startedAt = startedAt ?? (this.restoredDraft ? this.startedAt : null);
+    if (this.restoredDraft) this.saveDraft();
+  }
+
+  private restoreDraft(info: PostInfo, authoritative: boolean): void {
+    if (!this.draftKey) return;
+    try {
+      const raw = sessionStorage.getItem(this.draftKey);
+      if (!raw) return;
+      const draft = restoreAttempt(info, JSON.parse(raw) as unknown);
+      if (!draft) {
+        if (authoritative) this.clearDraft();
+        return;
+      }
+      this.startedAt = draft.startedAt;
+      this.moves = draft.moves;
+      this.history = draft.history;
+      this.angles = draft.history[draft.history.length - 1]!;
+      this.restoredDraft = true;
+      this.liveText = `Resumed with ${this.folds} ${this.folds === 1 ? 'fold' : 'folds'}.`;
+    } catch {
+      if (authoritative) this.clearDraft();
+    }
+  }
+
+  private saveDraft(): void {
+    if (!this.draftKey || !this.info || this.startedAt === null) return;
+    try {
+      const { kind, date, rev } = this.info;
+      sessionStorage.setItem(this.draftKey, JSON.stringify({
+        kind, date, rev, startedAt: this.startedAt, moves: movesToWire(this.moves),
+      }));
+    } catch {
+      /* The attempt is still playable if storage is blocked. */
+    }
+  }
+
+  private clearDraft(): void {
+    if (!this.draftKey) return;
+    try {
+      sessionStorage.removeItem(this.draftKey);
+    } catch {
+      /* storage blocked */
+    }
   }
 
   private showLocal(info: PostInfo, pending: PendingSubmission): boolean {
@@ -229,6 +288,7 @@ export class Controller {
     const puzzle = this.puzzle;
     if (this.phase !== 'play' || !puzzle || this.finishing) return;
     const level = toLevel(puzzle);
+    const attempt = this.info;
     let next: FoldAngle[];
     try {
       next = applyMove(level, this.angles, { index, angle });
@@ -242,12 +302,15 @@ export class Controller {
       void api
         .start()
         .then((response) => {
+          if (this.info !== attempt) return;
           this.startedAt = response.startedAt;
+          if (this.phase === 'play' && !this.finishing && !this.practice && !this.stale) this.saveDraft();
           this.emit();
         })
         .catch(() => undefined);
     }
     this.angles = next;
+    this.restoredDraft = false;
     this.moves.push({ index, angle });
     this.history.push([...next]);
     this.liveText = `Hinge ${index} set to ${angle} degrees. ${this.folds} ${this.folds === 1 ? 'fold' : 'folds'} so far.`;
@@ -266,6 +329,8 @@ export class Controller {
       } else {
         void this.finish();
       }
+    } else if (!this.practice && !this.stale) {
+      this.saveDraft();
     }
     this.emit();
   }
@@ -300,6 +365,7 @@ export class Controller {
   practiceReset(): void {
     const puzzle = this.puzzle;
     if (!puzzle) return;
+    this.clearDraft();
     this.practice = true;
     this.practiceFolds = null;
     this.angles = [...puzzle.start];
@@ -328,6 +394,7 @@ export class Controller {
         clientMs: pending.clientMs,
       });
       this.clearPending();
+      this.clearDraft();
       this.complete = complete;
       this.localResult = null;
       this.submitError = null;
@@ -368,6 +435,7 @@ export class Controller {
         clientMs,
       });
       this.complete = complete;
+      this.clearDraft();
       this.localResult = null;
       this.submitError = null;
       if (complete.scored) track('attempt_complete', { score: local.folds });
@@ -375,9 +443,11 @@ export class Controller {
       if (error instanceof ApiFailure && error.code === 'stale') {
         // A moderator regenerated the puzzle mid-attempt; this solve cannot be scored.
         this.stale = true;
+        this.clearDraft();
         this.submitError = null;
         this.localResult = null;
       } else if (error instanceof ApiFailure && (error.code === 'invalid-moves' || error.code === 'unsolved')) {
+        this.clearDraft();
         this.submitError = 'The server could not verify that solve. It was not saved.';
         this.localResult = null;
       } else {
@@ -396,6 +466,7 @@ export class Controller {
                 folds: local.folds,
               })
             );
+            this.clearDraft();
           } catch {
             /* storage blocked; the result is lost on reload, nothing more */
           }

@@ -1,4 +1,31 @@
+import { applyMove, isSolved, type FoldAngle, type FoldMove } from '../../shared/engine';
+import { parseMoves } from '../../shared/moves';
 import type { PostInfo } from '../../shared/postdata';
+import { toLevel } from '../../shared/puzzle';
+
+/** Rebuild an unfinished attempt and its undo history for the same puzzle. */
+export function restoreAttempt(info: PostInfo, value: unknown): { startedAt: number; moves: FoldMove[]; history: FoldAngle[][] } | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const draft = value as Record<string, unknown>;
+  if (draft.kind !== info.kind || draft.date !== info.date || draft.rev !== info.rev) return null;
+  if (typeof draft.startedAt !== 'number' || !Number.isFinite(draft.startedAt) || draft.startedAt <= 0) return null;
+  const moves = parseMoves(draft.moves);
+  if (!moves) return null;
+
+  const level = toLevel(info.puzzle);
+  let angles = [...info.puzzle.start];
+  const history = [angles];
+  try {
+    for (const move of moves) {
+      angles = applyMove(level, angles, move);
+      if (isSolved(level, angles)) return null;
+      history.push(angles);
+    }
+  } catch {
+    return null;
+  }
+  return { startedAt: draft.startedAt, moves, history };
+}
 
 /** A solve kept on the device until Reddit can store it. */
 export interface PendingSolve {

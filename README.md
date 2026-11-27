@@ -19,6 +19,7 @@ The gameplay clip shows a complete solve in the local harness.
 3. Match the outline in as few folds as you can. Undo costs a fold. Your first solve on the daily board counts, and you can practice afterward.
 
 Check your result against par, replay your folds privately, try the leaderboard, or share a spoiler-free grid.
+Refreshing the same tab keeps your unfinished folds and timer.
 After solving, you can build a Community Route for other players.
 
 ## How it uses Devvit

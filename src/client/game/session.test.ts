@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { PostInfo } from '../../shared/postdata';
-import { isPendingSolve, keepsPendingSolve, pendingAction, puzzleForPlay } from './session';
+import { isPendingSolve, keepsPendingSolve, pendingAction, puzzleForPlay, restoreAttempt } from './session';
 
 const puzzle = {
   turns: ['straight', 'straight', 'straight'] as const,
@@ -138,5 +138,24 @@ describe('isPendingSolve', () => {
     expect(isPendingSolve({ rev: 1, moves: [], clientMs: 0, folds: 0 })).toBe(true);
     expect(isPendingSolve({ rev: 1, clientMs: 10 })).toBe(false);
     expect(isPendingSolve(null)).toBe(false);
+  });
+});
+
+describe('restoreAttempt', () => {
+  const saved = { kind: 'daily', date: '2026-11-18', rev: 0, startedAt: 1234, moves: [[1, -90], [1, 0]] };
+
+  it('restores every legal prior pose and the original clock', () => {
+    expect(restoreAttempt(info(0), saved)).toEqual({
+      startedAt: 1234,
+      moves: [{ index: 1, angle: -90 }, { index: 1, angle: 0 }],
+      history: [[0, 0, 0], [0, -90, 0], [0, 0, 0]],
+    });
+  });
+
+  it('rejects a stale board, an illegal move and a finished attempt', () => {
+    expect(restoreAttempt(info(1), saved)).toBeNull();
+    expect(restoreAttempt(info(0, '2026-11-19'), saved)).toBeNull();
+    expect(restoreAttempt(info(0), { ...saved, moves: [[5, 90]] })).toBeNull();
+    expect(restoreAttempt(info(0), { ...saved, moves: [[1, 90]] })).toBeNull();
   });
 });
