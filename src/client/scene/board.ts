@@ -92,7 +92,7 @@ export class BoardScene {
   private readonly resizeObserver: ResizeObserver;
   private readonly onPointerDown: (event: PointerEvent) => void;
   private readonly onPointerMove: (event: PointerEvent) => void;
-  private readonly onPointerUp: (event: PointerEvent) => void;
+  private readonly onPointerEnd: (event: PointerEvent) => void;
 
   private basis: ViewBasis;
   private flipped = false;
@@ -239,11 +239,12 @@ export class BoardScene {
 
     this.onPointerDown = (event) => this.pointerDown(event);
     this.onPointerMove = (event) => this.pointerMove(event);
-    this.onPointerUp = (event) => this.pointerUp(event);
+    this.onPointerEnd = (event) => this.pointerEnd(event);
     canvas.addEventListener('pointerdown', this.onPointerDown);
     canvas.addEventListener('pointermove', this.onPointerMove);
-    canvas.addEventListener('pointerup', this.onPointerUp);
-    canvas.addEventListener('pointercancel', this.onPointerUp);
+    canvas.addEventListener('pointerup', this.onPointerEnd);
+    canvas.addEventListener('pointercancel', this.onPointerEnd);
+    canvas.addEventListener('lostpointercapture', this.onPointerEnd);
 
     this.resizeObserver = new ResizeObserver(() => this.resize());
     if (canvas.parentElement) this.resizeObserver.observe(canvas.parentElement);
@@ -327,8 +328,9 @@ export class BoardScene {
     this.resizeObserver.disconnect();
     this.canvas.removeEventListener('pointerdown', this.onPointerDown);
     this.canvas.removeEventListener('pointermove', this.onPointerMove);
-    this.canvas.removeEventListener('pointerup', this.onPointerUp);
-    this.canvas.removeEventListener('pointercancel', this.onPointerUp);
+    this.canvas.removeEventListener('pointerup', this.onPointerEnd);
+    this.canvas.removeEventListener('pointercancel', this.onPointerEnd);
+    this.canvas.removeEventListener('lostpointercapture', this.onPointerEnd);
     const geometries = new Set<THREE.BufferGeometry>();
     const materials = new Set<THREE.Material>();
     this.scene.traverse((object) => {
@@ -603,11 +605,11 @@ export class BoardScene {
     this.requestRender();
   }
 
-  private pointerUp(event: PointerEvent): void {
+  private pointerEnd(event: PointerEvent): void {
     const drag = this.drag;
     if (!drag || event.pointerId !== drag.pointerId) return;
     this.drag = null;
-    const intent = foldIntent(drag.startAngle, drag.distance, drag.armed);
+    const intent = event.type === 'pointerup' ? foldIntent(drag.startAngle, drag.distance, drag.armed) : 0;
     if (intent !== 0) {
       const angle = (drag.startAngle + intent * 90) as FoldAngle;
       this.committed[drag.index] = angle;
