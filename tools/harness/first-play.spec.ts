@@ -77,6 +77,11 @@ test('keyboard help, first score, private fold replay, and practice at phone wid
 });
 
 test('a saved solve stays visible when the leaderboard comparison is unavailable', async ({ page }) => {
+  await page.route('**/api/init', async (route) => {
+    const response = await route.fetch();
+    const init: InitResponse = await response.json();
+    await route.fulfill({ response, json: { ...init, startedAt: null, result: null } });
+  });
   await page.route('**/api/attempt/complete', async (route) => {
     const response = await route.fetch();
     const saved: CompleteResponse = await response.json();
