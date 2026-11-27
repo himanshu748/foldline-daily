@@ -192,3 +192,30 @@ test('a solved puzzle is retried after reloading during score submission', async
     release();
   }
 });
+
+test('a saved local solve remains visible when initialization fails after a reload', async ({ page }) => {
+  let connected = true;
+  await page.route('**/api/init', (route) => (connected ? route.continue() : route.abort()));
+  let saves = 0;
+  await page.route('**/api/attempt/complete', (route) => (++saves === 1 ? route.abort() : route.continue()));
+
+  await page.goto('/src/client/game.html');
+  const first = page.waitForRequest('**/api/attempt/complete');
+  await solveFixture(page);
+  const original = (await first).postDataJSON();
+  const result = page.getByRole('dialog', { name: /5 folds, par 5/ });
+  await expect(result).toBeVisible();
+
+  connected = false;
+  await page.reload();
+  await expect(result).toBeVisible();
+  await expect(result.getByText('Your result is saved here. Reconnect to submit it.')).toBeVisible();
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('foldline:pending:t3_harness') ?? 'null'))).toMatchObject(original);
+  expect(saves).toBe(1);
+
+  connected = true;
+  const retried = page.waitForRequest('**/api/attempt/complete');
+  await result.getByRole('button', { name: 'Reconnect' }).click();
+  expect((await retried).postDataJSON()).toEqual(original);
+  await expect(result.getByRole('button', { name: 'Comment your result' })).toBeVisible();
+});

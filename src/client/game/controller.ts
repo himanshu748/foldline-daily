@@ -104,6 +104,10 @@ export class Controller {
     return this.phase === 'solved';
   }
 
+  get canReconnectToSubmit(): boolean {
+    return this.initState === 'offline' && this.localResult !== null && readPending(context.postId)?.rev === this.info?.rev;
+  }
+
   /** Current server-time estimate, used by the timer and the countdown. */
   now(): number {
     return Date.now() + this.serverOffset;
@@ -153,6 +157,10 @@ export class Controller {
       }
     } catch (error) {
       this.initState = 'offline';
+      if (cached && this.phase === 'play' && !this.finishing && this.moves.length === 0) {
+        const pending = readPending(context.postId);
+        if (pending?.rev === cached.rev && this.showLocal(cached, pending)) this.clearDraft();
+      }
       if (!this.info || this.phase === 'loading') {
         this.error = error instanceof Error && error.message ? error.message : 'The puzzle could not be loaded.';
         this.phase = 'error';
