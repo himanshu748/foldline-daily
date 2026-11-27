@@ -43,7 +43,9 @@ menu.post('/regenerate', async (c) => {
   if (!posted)
     return c.json<UiResponse>({ showToast: `There is no puzzle post for ${date} yet.` });
   const finished =
-    count === 0
+    count === null
+      ? 'The finish count could not be confirmed.'
+      : count === 0
       ? 'Nobody has finished it yet.'
       : `${count} ${count === 1 ? 'player has' : 'players have'} finished it. They keep their streak credit.`;
   return c.json<UiResponse>({
