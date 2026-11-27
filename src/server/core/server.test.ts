@@ -425,6 +425,44 @@ describe('moderator tools', () => {
     expect(puzzleSignature(after!.puzzle)).not.toBe(puzzleSignature(before.puzzle));
   });
 
+  test('a failed return counter does not block the daily puzzle', async ({ headers }) => {
+    const yesterdayNow = NOW - 86_400_000;
+    const yesterday = await todaysPost(yesterdayNow);
+    await complete(
+      yesterday.info,
+      yesterday.board,
+      alice,
+      solution(yesterday.info),
+      yesterdayNow,
+      yesterday.info.date
+    );
+    const { postId } = await todaysPost();
+    const ctx = Context({
+      ...headers,
+      [Header.User]: alice.id,
+      [Header.Username]: alice.name,
+      [Header.Post]: postId,
+    });
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(NOW);
+    const counter = vi.spyOn(redis, 'hIncrBy').mockRejectedValueOnce(new Error('counter unavailable'));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const response = await runWithContext(ctx, async () => app.request('/api/init'));
+      expect(counter).toHaveBeenCalledWith(K.funnel(TODAY), 'return_next_day', 1);
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({
+        postId,
+        isToday: true,
+        streak: { current: 1, best: 1 },
+      });
+      expect(warn).toHaveBeenCalledWith('Return analytics could not be recorded:', expect.any(Error));
+    } finally {
+      warn.mockRestore();
+      counter.mockRestore();
+      clock.mockRestore();
+    }
+  });
+
   test('a logged-out player can read the leaderboard but cannot store a score', async ({ headers }) => {
     const { info, postId, board } = await todaysPost();
     await complete(info, board, alice, solution(info));
