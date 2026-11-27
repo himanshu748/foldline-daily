@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import type { InitResponse } from '../../src/shared/api';
+import { harnessPuzzle } from './puzzle';
 
 async function solveFixture(page: Page) {
   const secondHinge = page.getByRole('button', { name: /^Hinge 2,/ });
@@ -233,4 +234,37 @@ test('a saved local solve remains visible when initialization fails after a relo
   await result.getByRole('button', { name: 'Reconnect' }).click();
   expect((await retried).postDataJSON()).toEqual(original);
   await expect(result.getByRole('button', { name: 'Comment your result' })).toBeVisible();
+});
+
+test('a stalled initial response cannot hide a saved solve', async ({ page }) => {
+  const pending = {
+    rev: harnessPuzzle('2026-11-19').post.r,
+    moves: [[1, 0], [1, 90], [2, -90], [3, 0], [4, -90]],
+    clientMs: 5_000,
+    folds: 5,
+  };
+  await page.addInitScript((solve) => {
+    localStorage.setItem('foldline:pending:t3_harness', JSON.stringify(solve));
+  }, pending);
+  let release!: () => void;
+  const hold = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route('**/api/init', async (route) => {
+    await hold;
+    await route.abort().catch(() => undefined);
+  });
+
+  try {
+    const started = page.waitForRequest('**/api/init');
+    await page.goto('/src/client/game.html', { waitUntil: 'domcontentloaded' });
+    await started;
+    const result = page.getByRole('dialog', { name: /5 folds, par 5/ });
+    await expect(result.getByRole('button', { name: 'Reconnect' })).toBeVisible({ timeout: 7_000 });
+    expect(
+      await page.evaluate(() => JSON.parse(localStorage.getItem('foldline:pending:t3_harness') ?? 'null'))
+    ).toEqual(pending);
+  } finally {
+    release();
+  }
 });

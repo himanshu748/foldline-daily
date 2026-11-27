@@ -26,11 +26,12 @@ export class ApiFailure extends Error {
   }
 }
 
-async function call<T>(path: string, body?: unknown): Promise<T> {
+async function call<T>(path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
   let response: Response;
   try {
     response = await fetch(path, {
       method: body === undefined ? 'GET' : 'POST',
+      ...(signal ? { signal } : {}),
       ...(body === undefined
         ? {}
         : { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }),
@@ -51,7 +52,15 @@ async function call<T>(path: string, body?: unknown): Promise<T> {
 }
 
 export const api = {
-  init: () => call<InitResponse>('/api/init'),
+  init: async () => {
+    const request = new AbortController();
+    const timeout = setTimeout(() => request.abort(), 4_000);
+    try {
+      return await call<InitResponse>('/api/init', undefined, request.signal);
+    } finally {
+      clearTimeout(timeout);
+    }
+  },
   start: () => call<StartResponse>('/api/attempt/start', {}),
   complete: (request: CompleteRequest) => call<CompleteResponse>('/api/attempt/complete', request),
   leaderboard: () => call<LeaderboardResponse>('/api/leaderboard'),
