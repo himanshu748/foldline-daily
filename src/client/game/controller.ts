@@ -49,6 +49,7 @@ export class Controller {
   /** Set when the solve could not be saved (logged out or offline). */
   localResult: LocalResult | null = null;
   submitError: string | null = null;
+  submittingPending = false;
   stale = false;
   practice = false;
   /** Folds in the latest finished practice run; the scored result never changes. */
@@ -388,7 +389,7 @@ export class Controller {
   /** Retry a result that could not be saved earlier (after login, or after a network error). */
   async submitPending(): Promise<void> {
     const postId = context.postId;
-    if (!postId || !this.loggedIn) return;
+    if (!postId || !this.loggedIn || this.submittingPending) return;
     const pending = readPending(postId);
     if (!pending) return;
     const moves = parseMoves(pending.moves);
@@ -396,6 +397,8 @@ export class Controller {
       this.clearPending();
       return;
     }
+    this.submittingPending = true;
+    this.emit();
     try {
       const complete = await api.complete({
         rev: pending.rev,
@@ -408,7 +411,6 @@ export class Controller {
       this.localResult = null;
       this.submitError = null;
       this.phase = 'solved';
-      this.emit();
     } catch (error) {
       const code = error instanceof ApiFailure ? error.code : null;
       if (!keepsPendingSolve(code)) {
@@ -420,6 +422,8 @@ export class Controller {
       } else {
         this.submitError = 'Your result could not be saved yet.';
       }
+    } finally {
+      this.submittingPending = false;
       this.emit();
     }
   }
