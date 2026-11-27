@@ -68,3 +68,22 @@ it('allows another save after a pending solve request fails', async () => {
   expect(controller.complete).toEqual(completed);
   expect(storage.size).toBe(0);
 });
+
+it.each(['success', 'stale'])('keeps a newer local solve when an older retry returns %s', async (outcome) => {
+  const { controller, storage } = pendingSolve();
+  let resolve!: (response: CompleteResponse) => void;
+  let reject!: (error: ApiFailure) => void;
+  vi.spyOn(api, 'complete').mockReturnValue(new Promise((success, failure) => {
+    resolve = success;
+    reject = failure;
+  }));
+
+  const retrying = controller.submitPending();
+  const newer = JSON.stringify({ rev: 2, moves: [[2, -90]], clientMs: 4000, folds: 1 });
+  storage.set('foldline:pending:t3_retry', newer);
+  if (outcome === 'success') resolve(completed);
+  else reject(new ApiFailure(409, 'stale', 'This puzzle changed'));
+  await retrying;
+
+  expect(storage.get('foldline:pending:t3_retry')).toBe(newer);
+});
