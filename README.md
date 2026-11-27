@@ -18,7 +18,7 @@ The gameplay clip shows a complete solve in the local harness.
 2. Drag a panel to fold its hinge by 90°, or select a numbered hinge and tap **Fold up** or **Fold down**. On a keyboard, use the number keys and arrows.
 3. Match the outline in as few folds as you can. Undo costs a fold. Your first solve on the daily board counts, and you can practice afterward.
 
-Check your result against par, try the leaderboard, or share a spoiler-free grid.
+Check your result against par, replay your folds privately, try the leaderboard, or share a spoiler-free grid.
 After solving, you can build a Community Route for other players.
 
 ## How it uses Devvit

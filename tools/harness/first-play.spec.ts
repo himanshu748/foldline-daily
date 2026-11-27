@@ -8,9 +8,13 @@ async function solveFixture(page: Page) {
   }
 }
 
-test('keyboard help, first score, and practice at phone width', async ({ page }) => {
+test('keyboard help, first score, private fold replay, and practice at phone width', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
+  let submissions = 0;
+  page.on('request', (request) => {
+    if (new URL(request.url()).pathname === '/api/attempt/complete') submissions++;
+  });
   await page.goto('/src/client/game.html');
 
   const helpButton = page.locator('button[aria-label="How to play"]');
@@ -34,11 +38,35 @@ test('keyboard help, first score, and practice at phone width', async ({ page })
   await expect(resultHeading).toBeFocused();
   await expect(result.getByRole('region', { name: 'Leaderboard' }).getByText('harness (you)')).toBeVisible();
 
+  const shareGrid = await result.locator('.card__grid').innerText();
+  await result.getByRole('button', { name: 'Replay your folds' }).click();
+  const replay = result.getByRole('region', { name: 'Private fold replay' });
+  await expect(replay.getByText('Fold 0 of 5. Starting position.')).toBeVisible();
+  const previous = replay.getByRole('button', { name: 'Previous fold' });
+  const next = replay.getByRole('button', { name: 'Next fold' });
+  await expect(previous).toBeDisabled();
+  const canvas = replay.locator('canvas');
+  const initial = await canvas.evaluate((node: HTMLCanvasElement) => node.toDataURL());
+  await next.click();
+  await expect(replay.getByText('Fold 1 of 5. Hinge 1 set flat.')).toBeVisible();
+  await expect.poll(() => canvas.evaluate((node: HTMLCanvasElement) => node.toDataURL())).not.toBe(initial);
+  for (let step = 1; step < 5; step++) await next.click();
+  await expect(replay.getByText('Fold 5 of 5. Hinge 4 set down.')).toBeVisible();
+  await expect(next).toBeDisabled();
+  await previous.click();
+  await expect(replay.getByText(/^Fold 4 of 5\./)).toBeVisible();
+  await result.getByRole('button', { name: 'Hide fold replay' }).click();
+  await expect(replay).toHaveCount(0);
+  expect(await result.locator('.card__grid').innerText()).toBe(shareGrid);
+  expect(submissions).toBe(1);
+
   await result.getByRole('button', { name: 'Practice this puzzle' }).click();
   await expect(result).toHaveCount(0);
   await expect(page.getByText('Practice run: your score is safe.')).toBeVisible();
   await solveFixture(page);
   await expect(result.getByText('Your score today stays 5 folds.')).toBeVisible();
+  await expect(result.getByRole('button', { name: 'Replay practice folds' })).toBeVisible();
+  expect(submissions).toBe(1);
   expect(errors).toEqual([]);
 });
 
