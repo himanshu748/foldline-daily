@@ -67,13 +67,7 @@ export function EndCard({ controller }: { controller: Controller }) {
 
   const complete = controller.complete;
   const streak = complete?.streak ?? init?.streak ?? { current: 0, best: 0, tier: null, nextTier: null };
-  const field = complete?.field ??
-    init?.field ?? {
-      total: 0,
-      rank: null,
-      dist: Array<number>(DIST_BUCKETS).fill(0),
-      standing: null,
-    };
+  const field = complete ? complete.field : (init?.field ?? null);
   const storedServerSide = Boolean(complete ?? init?.result);
   const canReconnect = controller.canReconnectToSubmit;
   const practiceFolds = controller.practiceFolds;
@@ -81,7 +75,8 @@ export function EndCard({ controller }: { controller: Controller }) {
   const overPar = shownFolds - result.par;
   const reason = complete && !complete.scored ? (complete.reason ?? 'practice') : null;
   const myBucket = bucketFor(result.folds, result.par);
-  const peak = Math.max(1, ...field.dist);
+  const standing = field && practiceFolds === null ? resultNote(field.standing, field.total) : null;
+  const peak = Math.max(1, ...(field?.dist ?? []));
 
   const onShare = async () => {
     setShare('posting');
@@ -157,7 +152,7 @@ export function EndCard({ controller }: { controller: Controller }) {
                 in <span className="num">{formatTime(result.ms)}</span>.
               </>
             )}
-            {practiceFolds === null && resultNote(field.standing, field.total) ? <> {resultNote(field.standing, field.total)}</> : null}
+            {standing && <> {standing}</>}
           </p>
         </header>
 
@@ -222,24 +217,28 @@ export function EndCard({ controller }: { controller: Controller }) {
           )}
         </div>
 
-        <div
-          className="dist"
-          role="img"
-          aria-label={`How today's players did. You finished ${myBucket === 0 ? 'right on par' : `${myBucket} over par`}.`}
-        >
-          {field.dist.map((count, index) => (
-            <div className="dist__col" key={index}>
-              <span className="dist__count num">{count > 0 ? count : ''}</span>
-              <div
-                className={index === myBucket ? 'dist__bar dist__bar--me' : 'dist__bar'}
-                style={{
-                  height: `${Math.max(4, Math.round((count / peak) * 72))}px`,
-                }}
-              />
-              <span className="dist__label">{index === 0 ? 'par' : index === DIST_BUCKETS - 1 ? `+${DIST_BUCKETS - 1}` : `+${index}`}</span>
-            </div>
-          ))}
-        </div>
+        {field ? (
+          <div
+            className="dist"
+            role="img"
+            aria-label={`How today's players did. You finished ${myBucket === 0 ? 'right on par' : `${myBucket} over par`}.`}
+          >
+            {field.dist.map((count, index) => (
+              <div className="dist__col" key={index}>
+                <span className="dist__count num">{count > 0 ? count : ''}</span>
+                <div
+                  className={index === myBucket ? 'dist__bar dist__bar--me' : 'dist__bar'}
+                  style={{
+                    height: `${Math.max(4, Math.round((count / peak) * 72))}px`,
+                  }}
+                />
+                <span className="dist__label">{index === 0 ? 'par' : index === DIST_BUCKETS - 1 ? `+${DIST_BUCKETS - 1}` : `+${index}`}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="card__muted">Leaderboard comparison is unavailable.</p>
+        )}
 
         <p className="card__streak">
           Streak <b className="num">{streak.current}</b>, best <b className="num">{streak.best}</b>
