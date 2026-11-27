@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import type { InitResponse } from '../../src/shared/api';
+import type { CompleteResponse, InitResponse } from '../../src/shared/api';
 import { harnessPuzzle } from './puzzle';
 
 async function solveFixture(page: Page) {
@@ -76,6 +76,22 @@ test('keyboard help, first score, private fold replay, and practice at phone wid
   expect(errors).toEqual([]);
 });
 
+test('a saved solve stays visible when the leaderboard comparison is unavailable', async ({ page }) => {
+  await page.route('**/api/attempt/complete', async (route) => {
+    const response = await route.fetch();
+    const saved: CompleteResponse = await response.json();
+    await route.fulfill({ response, json: { ...saved, field: null } satisfies CompleteResponse });
+  });
+
+  await page.goto('/src/client/game.html');
+  await solveFixture(page);
+
+  const result = page.getByRole('dialog', { name: /5 folds, par 5/ });
+  await expect(result.getByText('Leaderboard comparison is unavailable.')).toBeVisible();
+  await expect(result.getByRole('img', { name: /How today's players did/ })).toHaveCount(0);
+  await expect(result.getByRole('button', { name: 'Comment your result' })).toBeVisible();
+});
+
 test('a signed-out solve survives reload and offers the Reddit login prompt', async ({ page }) => {
   await page.route('**/api/init', async (route) => {
     const response = await route.fetch();
@@ -87,7 +103,7 @@ test('a signed-out solve survives reload and offers the Reddit login prompt', as
         user: { loggedIn: false, name: null },
         startedAt: null,
         result: null,
-        field: { ...init.field, rank: null, standing: null },
+        field: init.field ? { ...init.field, rank: null, standing: null } : null,
       } satisfies InitResponse,
     });
   });

@@ -244,11 +244,13 @@ describe('scored attempts', () => {
       )
     );
     const field = await fieldView(board, 'player1');
-    expect(field.total).toBe(30);
-    expect(field.dist).toEqual([20, 0, 10, 0, 0, 0, 0]);
     // player1 solved at par with the shortest time among par solvers.
-    expect(field.rank).toBe(0);
-    expect(field.standing).toBe('Top 4% of 30');
+    expect(field).toEqual({
+      total: 30,
+      dist: [20, 0, 10, 0, 0, 0, 0],
+      rank: 0,
+      standing: 'Top 4% of 30',
+    });
     const board10 = await leaderboard(board, players[0]!);
     expect(board10.rows).toHaveLength(10);
     expect(board10.rows[0]).toMatchObject({ rank: 1, name: 'player1', folds: info.puzzle.par, ms: 11_000 });
@@ -459,6 +461,32 @@ describe('moderator tools', () => {
     } finally {
       warn.mockRestore();
       counter.mockRestore();
+      clock.mockRestore();
+    }
+  });
+
+  test('a failed field read does not block opening or scoring the daily puzzle', async ({ headers }) => {
+    const { info, postId, board } = await todaysPost();
+    const ctx = Context({
+      ...headers,
+      [Header.User]: alice.id,
+      [Header.Username]: alice.name,
+      [Header.Post]: postId,
+    });
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(NOW);
+    const field = vi.spyOn(redis, 'zCard').mockRejectedValue(new Error('field unavailable'));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const init = await runWithContext(ctx, async () => app.request('/api/init'));
+      expect(init.status).toBe(200);
+      expect(await init.json()).toMatchObject({ postId, field: null });
+
+      const result = await complete(info, board, alice, solution(info));
+      expect(result).toMatchObject({ scored: true, field: null, streakExtended: true });
+      expect(await loadResult(board, alice.id)).toMatchObject({ folds: solution(info).length });
+    } finally {
+      warn.mockRestore();
+      field.mockRestore();
       clock.mockRestore();
     }
   });

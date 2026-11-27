@@ -70,12 +70,17 @@ export async function startAttempt(board: string, userId: string, now: number): 
   return Number.isFinite(stored) && stored > 0 ? stored : now;
 }
 
-export async function fieldView(board: string, scoredName: string | null): Promise<FieldView> {
-  const [total, rawDist, rank] = await Promise.all([
+export async function fieldView(board: string, scoredName: string | null): Promise<FieldView | null> {
+  const stats = await Promise.all([
     redis.zCard(K.lb(board)),
     redis.hGetAll(K.dist(board)),
     scoredName ? redis.zRank(K.lb(board), scoredName) : Promise.resolve(undefined),
-  ]);
+  ]).catch((error: unknown) => {
+    console.warn('Leaderboard comparison could not be loaded:', error);
+    return null;
+  });
+  if (!stats) return null;
+  const [total, rawDist, rank] = stats;
   const dist: number[] = [];
   for (let bucket = 0; bucket < DIST_BUCKETS; bucket++)
     dist.push(Math.max(0, Number(rawDist?.[String(bucket)] ?? 0) || 0));

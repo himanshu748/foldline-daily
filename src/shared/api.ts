@@ -49,7 +49,8 @@ export interface InitResponse {
   startedAt: number | null;
   result: ResultView | null;
   streak: StreakView;
-  field: FieldView;
+  /** Null when the leaderboard comparison could not be loaded. */
+  field: FieldView | null;
   flair: { enabled: boolean; optedIn: boolean };
   routes: { enabled: boolean; submitted: boolean };
   subscribed: boolean;
@@ -81,7 +82,8 @@ export interface CompleteResponse {
   /** This attempt's own numbers, for practice feedback. */
   attempt: { folds: number; ms: number };
   streak: StreakView;
-  field: FieldView;
+  /** Null when the leaderboard comparison could not be loaded. */
+  field: FieldView | null;
   streakExtended: boolean;
   newTier: string | null;
   flairStatus: FlairStatus;
