@@ -152,3 +152,43 @@ test('an unfinished attempt keeps its timer, folds and undo history across reloa
   expect(starts).toBe(1);
   expect(submissions).toBe(1);
 });
+
+test('a solved puzzle is retried after reloading during score submission', async ({ page }) => {
+  await page.route('**/api/init', async (route) => {
+    const response = await route.fetch();
+    const init: InitResponse = await response.json();
+    await route.fulfill({ response, json: { ...init, result: null } });
+  });
+  let attempts = 0;
+  let release!: () => void;
+  const hold = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route('**/api/attempt/complete', async (route) => {
+    if (++attempts === 1) {
+      await hold;
+      await route.abort().catch(() => undefined);
+      return;
+    }
+    await route.continue();
+  });
+
+  try {
+    await page.goto('/src/client/game.html');
+    const first = page.waitForRequest('**/api/attempt/complete');
+    await solveFixture(page);
+    const original = (await first).postDataJSON();
+    // Check before navigation can abort the request and run its failure handler.
+    const pending = await page.evaluate(() => JSON.parse(localStorage.getItem('foldline:pending:t3_harness') ?? 'null'));
+    expect(pending).toMatchObject(original);
+    const retried = page.waitForRequest('**/api/attempt/complete', { timeout: 5_000 });
+    await page.reload();
+    expect((await retried).postDataJSON()).toEqual(original);
+    const result = page.getByRole('dialog', { name: /5 folds, par 5/ });
+    await expect(result.getByRole('button', { name: 'Comment your result' })).toBeVisible();
+    expect(await page.evaluate(() => localStorage.getItem('foldline:pending:t3_harness'))).toBeNull();
+    expect(attempts).toBe(2);
+  } finally {
+    release();
+  }
+});
