@@ -336,6 +336,23 @@ describe('scored attempts', () => {
     expect(board10.me).toMatchObject({ rank: 21, name: 'player0', folds: info.puzzle.par + 2, me: true });
   });
 
+  test('shows ranked results even when the avatar cache is unavailable', async () => {
+    const { info, board } = await todaysPost();
+    await complete(info, board, alice, solution(info));
+    const read = redis.hMGet.bind(redis);
+    const avatarCache = vi.spyOn(redis, 'hMGet').mockImplementation((key, fields) =>
+      key === K.avatars ? Promise.reject(new Error('avatar cache unavailable')) : read(key, fields)
+    );
+    try {
+      expect(await leaderboard(board, alice)).toMatchObject({
+        total: 1,
+        rows: [{ rank: 1, name: alice.name, folds: info.puzzle.par, avatar: null, me: true }],
+      });
+    } finally {
+      avatarCache.mockRestore();
+    }
+  });
+
   test('forged, illegal, unsolved and stale fold lists are rejected and store nothing', async () => {
     const { info, board } = await todaysPost();
     const attempt = (body: unknown) =>

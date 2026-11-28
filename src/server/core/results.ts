@@ -187,7 +187,11 @@ export async function completeAttempt(input: CompleteInput, body: unknown): Prom
 async function avatarsFor(names: string[]): Promise<Map<string, string>> {
   const avatars = new Map<string, string>();
   if (names.length === 0) return avatars;
-  const cached = await redis.hMGet(K.avatars, names);
+  const cached = await redis.hMGet(K.avatars, names).catch((error: unknown) => {
+    console.warn('Leaderboard avatars could not be loaded:', error);
+    return null;
+  });
+  if (!cached) return avatars;
   const missing: string[] = [];
   names.forEach((name, index) => {
     const url = cached[index];
