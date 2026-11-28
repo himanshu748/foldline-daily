@@ -428,7 +428,7 @@ export class Controller {
         this.localResult = null;
         this.submitError = code === 'stale' ? null : 'The server could not verify that solve. It was not saved.';
         if (code === 'stale') this.stale = true;
-        if (this.info) this.applyFresh(this.info);
+        if (this.info && !this.practice) this.applyFresh(this.info);
       } else {
         this.submitError = 'Your result could not be saved yet.';
       }
