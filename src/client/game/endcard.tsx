@@ -63,14 +63,31 @@ export function EndCard({ controller }: { controller: Controller }) {
   const routeDone = routeChoice ?? init?.routes.submitted ?? false;
 
   const result = controller.result;
-  if (!result) return null;
+  const practiceFolds = controller.practiceFolds;
+  if (!result) {
+    return practiceFolds === null ? null : (
+      <ModalSheet titleId="result-title">
+        <div className="sheet__card">
+          <header className="card__head">
+            <p className="card__kicker">Foldline · Practice run</p>
+            <h2 className="card__title" id="result-title" tabIndex={-1}>
+              {practiceFolds} {practiceFolds === 1 ? 'fold' : 'folds'}
+            </h2>
+            <p className="card__sub">Practice solves do not enter the leaderboard.</p>
+          </header>
+          <div className="card__actions">
+            <button className="btn" onClick={() => controller.practiceReset()}>Practice again</button>
+          </div>
+        </div>
+      </ModalSheet>
+    );
+  }
 
   const complete = controller.complete;
   const streak = complete ? complete.streak : (init?.streak ?? null);
   const field = complete ? complete.field : (init?.field ?? null);
   const storedServerSide = Boolean(complete ?? init?.result);
   const canReconnect = controller.canReconnectToSubmit;
-  const practiceFolds = controller.practiceFolds;
   const shownFolds = practiceFolds ?? result.folds;
   const overPar = shownFolds - result.par;
   const reason = complete && !complete.scored ? (complete.reason ?? 'practice') : null;
