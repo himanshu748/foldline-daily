@@ -169,3 +169,24 @@ it('keeps an active practice round open when a saved solve is confirmed', async 
   expect(controller.complete).toEqual(completed);
   expect(storage.size).toBe(0);
 });
+
+it.each(['invalid-moves', 'stale'])('keeps practice open when a pending ranked solve is rejected as %s', async (code) => {
+  const { controller, storage } = pendingSolve();
+  let reject!: (failure: ApiFailure) => void;
+  vi.spyOn(api, 'init').mockResolvedValue(olderInit(null));
+  vi.spyOn(api, 'complete').mockReturnValue(new Promise((_, fail) => { reject = fail; }));
+
+  await controller.load();
+  expect(controller.submittingPending).toBe(true);
+  controller.practiceReset();
+  controller.fold(2, 90);
+
+  reject(new ApiFailure(code === 'stale' ? 409 : 400, code, 'Ranked solve rejected'));
+  await vi.waitFor(() => expect(controller.submittingPending).toBe(false));
+
+  expect(controller.phase).toBe('play');
+  expect(controller.moves).toEqual([{ index: 2, angle: 90 }]);
+  expect(controller.practice).toBe(true);
+  expect(controller.stale).toBe(code === 'stale');
+  expect(storage.size).toBe(0);
+});
