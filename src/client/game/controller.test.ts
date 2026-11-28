@@ -189,4 +189,13 @@ it.each(['invalid-moves', 'stale'])('keeps practice open when a pending ranked s
   expect(controller.practice).toBe(true);
   expect(controller.stale).toBe(code === 'stale');
   expect(storage.size).toBe(0);
+
+  controller.fold(2, 0);
+  controller.fold(1, 90);
+  expect(controller.phase).toBe('solved');
+  expect(controller.practiceFolds).toBe(3);
+  expect(controller.result).toBeNull();
+  controller.practiceReset();
+  expect(controller.phase).toBe('play');
+  expect(controller.moves).toHaveLength(0);
 });
