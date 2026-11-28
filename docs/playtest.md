@@ -40,8 +40,25 @@ checks below cover the actual platform.
 Devvit Journeys calls were observed in playtest, which returns
 `JOURNEY_RECEIPT_DENIED_PLAYTEST`. A valid receipt requires a non-playtest install.
 
+## Native regenerate verification
+
+Use a private playtest for the moderator action. Save the current post URL,
+puzzle date, revision and at least one scored solve before changing it.
+
+1. Open **Foldline: regenerate today's puzzle** and cancel once. Reopen the
+   post and confirm that the silhouette and revision stayed the same.
+2. Open the action again, confirm it, then follow the post that opens. The new
+   silhouette should differ and its revision should advance. Depending on the
+   title, the action may update the post in place or open a replacement.
+3. Confirm the earlier solver kept their streak, then finish the new board and
+   check that this revision starts its own leaderboard. Record the app version,
+   both post URLs, and before/after puzzle identifiers in [issue #19](https://github.com/himanshu748/foldline-daily/issues/19).
+
+The server unit tests exercise these transitions with a fake Reddit context.
+The checklist above is for collecting native evidence. Use [issue #16](https://github.com/himanshu748/foldline-daily/issues/16) for the separate public-player check.
+
 ## Record the demo
 
-The 45-second shot list is [demo-shot-list.md](demo-shot-list.md). Record it from the
+The [submitted 58.5-second video](https://youtu.be/WoT1h9iPjf4) shows the labeled local harness. For a native replacement, the 45-second shot list is [demo-shot-list.md](demo-shot-list.md). Record it from the
 public demo post on a phone-sized viewport. The private playtest URL uses the
 registered slug `contrarian-daily`. Say Foldline in the recording.
