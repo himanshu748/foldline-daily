@@ -24,7 +24,7 @@ Devvit Web Interactive Post: React client, server replay validation. A scheduled
 
 ## Accomplishments we're proud of
 
-The port preserves what made the original work — the physical intuition of folding — inside a completely different medium. Live on r/FoldlineDaily with daily posts since launch.
+The port preserves the physical intuition of folding inside a Reddit post. The public Day 1 post and a locally recorded five-fold solve give judges two ways to see the game.
 
 ## What's next for Foldline Daily
 
@@ -40,4 +40,5 @@ Player-authored puzzle chains, weekly league tables, and streak flair tiers.
 - Demo post: https://www.reddit.com/r/FoldlineDaily/comments/1y1uv2a/day_1_six_panels_two_corners_par_7/
 - Demo subreddit: https://www.reddit.com/r/FoldlineDaily/
 - Repository: https://github.com/himanshu748/foldline-daily
-- Video: `YOUTUBE_URL_HERE` (45–60s of real gameplay is enough)
+- Current clip: [28-second local playthrough](demo-video.mp4). It uses the browser harness with simulated Reddit endpoints.
+- Optional Devpost video: use a supported public video host if uploading a clip. For new footage, follow the [Reddit recording shot list](demo-shot-list.md).
