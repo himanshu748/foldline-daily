@@ -40,5 +40,4 @@ Player-authored puzzle chains, weekly league tables, and streak flair tiers.
 - Demo post: https://www.reddit.com/r/FoldlineDaily/comments/1y1uv2a/day_1_six_panels_two_corners_par_7/
 - Demo subreddit: https://www.reddit.com/r/FoldlineDaily/
 - Repository: https://github.com/himanshu748/foldline-daily
-- Current clip: [28-second local playthrough](demo-video.mp4). It uses the browser harness with simulated Reddit endpoints.
-- Optional Devpost video: use a supported public video host if uploading a clip. For new footage, follow the [Reddit recording shot list](demo-shot-list.md).
+- Demo video: [58.5-second five-fold solve at par](https://youtu.be/WoT1h9iPjf4). The video shows the result card and private replay, with an on-screen label identifying the local harness and simulated Devvit endpoints throughout.
