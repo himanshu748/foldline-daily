@@ -149,3 +149,23 @@ it('does not retry a newer solve from an older open board', async () => {
   expect(storage.get('foldline:pending:t3_retry')).toBe(newerSolve);
   expect(controller.stale).toBe(true);
 });
+
+it('keeps an active practice round open when a saved solve is confirmed', async () => {
+  const { controller, storage } = pendingSolve();
+  let respond!: (response: CompleteResponse) => void;
+  vi.spyOn(api, 'init').mockResolvedValue(olderInit(null));
+  vi.spyOn(api, 'complete').mockReturnValue(new Promise((resolve) => { respond = resolve; }));
+
+  await controller.load();
+  expect(controller.submittingPending).toBe(true);
+  controller.practiceReset();
+  controller.fold(2, 90);
+
+  respond(completed);
+  await vi.waitFor(() => expect(controller.submittingPending).toBe(false));
+
+  expect(controller.phase).toBe('play');
+  expect(controller.moves).toEqual([{ index: 2, angle: 90 }]);
+  expect(controller.complete).toEqual(completed);
+  expect(storage.size).toBe(0);
+});
