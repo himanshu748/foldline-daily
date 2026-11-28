@@ -419,7 +419,8 @@ export class Controller {
       this.complete = complete;
       this.localResult = null;
       this.submitError = null;
-      this.phase = 'solved';
+      // Confirming the ranked result must not end a practice round already in progress.
+      if (!this.practice) this.phase = 'solved';
     } catch (error) {
       const code = error instanceof ApiFailure ? error.code : null;
       if (!keepsPendingSolve(code)) {
